@@ -4,6 +4,11 @@ subtitle: "A replication and extension of < PAPER TITLE > by < ORIGINAL AUTHORS 
 author: "Your Names (your unis)"
 date: '`r Sys.time()`'
 output:
+  html_document:
+    code_folding: hide
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
   pdf_document:
     toc: yes
     toc_depth: 3
