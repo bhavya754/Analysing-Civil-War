@@ -17,7 +17,8 @@ download_datafiles:
 	Rscript -e 'rmarkdown::render("project_extenion3.Rmd", params = list(threshold = "0.1"))'
 	Rscript -e 'rmarkdown::render("project_extenion3.Rmd", params = list(threshold = "0.5"))'
 	#Final Report
-	Rscript -e 'rmarkdown::render("02_final_report.Rmd")'
+	Rscript -e 'rmarkdown::render("02_final_report.Rmd", output_format = "html_document")'
+	Rscript -e 'rmarkdown::render("02_final_report.Rmd", output_format = "pdf_document")'
 
 clean:
 	rm project_*.pdf *.csv *.html
