@@ -787,9 +787,9 @@ for (i in c(1:5)) {
 
 lower_lim = 1
 upper_lim = 5*k
-print(all_tests)
 return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
 }
+
 temp1_1<- opportunity_model_ext2(0.1)
 temp1_2<- opportunity_model_ext2(0.5)
 print("For threshold = 0.1 :")
