@@ -7,6 +7,11 @@ output:
   pdf_document:
     toc: yes
     toc_depth: 3
+  html_document:
+    code_folding: hide
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
 params:
   threshold: "0.5"
 ---
@@ -397,4 +402,10 @@ names(result)[1]<-"model"
 print(result)
 
 write.csv(result, file = paste0("Project_Extension_2_Threshold_", params$threshold, ".csv"))
+```
+
+The following is a list of all packages used to generate these results. (Leave at very end of file.)
+
+```{r}
+sessionInfo()
 ```

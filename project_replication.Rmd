@@ -7,6 +7,11 @@ output:
   pdf_document:
     toc: yes
     toc_depth: 3
+  html_document:
+    code_folding: hide
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
 ---
 
 ```{r setup, include=FALSE}
@@ -223,4 +228,10 @@ for (i in c(1:6)) {
 
   print(summarize_into_table(summary(robustness.subdata)), quote =FALSE)
 }
+```
+
+The following is a list of all packages used to generate these results. (Leave at very end of file.)
+
+```{r}
+sessionInfo()
 ```

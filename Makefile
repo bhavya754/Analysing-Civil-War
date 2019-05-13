@@ -15,4 +15,4 @@ mds_project.html:
 	Rscript -e 'rmarkdown::render("project_extenion3.Rmd", params = list(threshold = "0.5"))'
 
 clean:
-	rm *.pdf *.csv
+	rm project_*.pdf *.csv *.html
