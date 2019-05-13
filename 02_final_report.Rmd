@@ -1,0 +1,1179 @@
+---
+title: "MSD 2019 Final Project"
+subtitle: "A replication of Greed and Grievance in Civil War by Paul Collier and Anke Hoeffler, 2000"
+author: "Kiran Ramesh (kr2789), Sai Srujan Chinta (sc4401), Bhavya Shahi (bs3118)"
+date: '`r Sys.time()`'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 3
+  html_document:
+    code_folding: hide
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+library(here)
+library(scales)
+library(tidyverse)
+library(foreign)
+library(DescTools)
+library(lme4)
+library(ROCR)
+library(glmnet)
+theme_set(theme_bw())
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=50),tidy=TRUE, warning = FALSE)
+```
+
+# 1. Introduction
+Most major conflicts today aren’t international conflicts but are civil wars. The authors cite the Stockholm International Peace Research Institute which claims that all of the 15 major armed conflicts in 2002 (the year before the paper was published) were civil wars. In a previous work by the same authors (published in 1998), the authors proposed that the post-conflict gains by the rebels would be the primary motivation for civil war. The paper focused on testing the implication that if the post-conflict pay-offs were high, there would be justification for prolonging the civil war. The authors revisit this assumption in this paper, as they recognize that the previous assumption was untenable: The rebel groups usually cover their costs during the conflict. Thus, they propose a more general theory in this paper which compares the opportunities for rebellion versus the constraints to rebellion. 
+
+Political science states that most rebellions occur when grievances are sufficiently dire that people feel the need to rebel. However economic theory states that rebellion is an industry which generates profits for the rebels (through looting and extortion), and thus rebels are motivated by greed. Thus, rebellions arises when there are atypical opportunities for profit available, and not due to motivation. 
+
+The paper compares the two theories- opportunity (greed) versus motivation (grievance). 
+
+# 2. Replicating the Original Study
+
+## 2.1 Data description
+
+The authors define civil war as “an internal conflict with at least 1000 combat-related deaths per year. In addition, to distinguish a war from a massacre, at least 5% of fatalities must be suffered by both the government and a rebel group. 
+
+The sample that is used in this paper covers around 750 five-year episodes (79 civil wars) spanning across 161 countries over the period 1960-1999 (ref 1). Data should be scaled to reflect the population of the country where appropriate.
+
+To quantify opportunity, the authors consider several proxies including:
+
+1) Extortion of natural resources: The proxy used is the ratio between primary commodity exports to the GDP of the country (i.e the dependence of the country on its primary export). If a country is rich in natural resources (such as Saudi Arabia), the government may be too well financed making rebellion untenable.
+
+2) Financing from diasporas: The proxy is the proportion of a country’s population living in the United States. This is also separated into the two- the people who emigrated due to the conflict, and those that emigrated for other reasons.
+
+3) Finance from rebel governments : The proxy is the Cold War during which each great country financed rebellions in countries which were allied to the opposing country. 
+
+4) Forgone income: The income that the rebel loses by joining the rebellion. If this is low, the rebel has more of a reason to rebel. This is proxied using three variables - mean income per capita, male secondary schooling, and growth rate of the country. 
+
+5) Cost of rebellion: When the cost of weapons, skills etc. is low, the opportunity for rebellion may be higher. This is proxied by the time since the previous conflict. 
+
+6) Government military ability: If the terrain of the country is favorable to the rebels, the government has a weak military, or the country’s population is dispersed, opportunity for conflict may be high. 
+
+7) Ethnic and religious diversity: The more diverse a society is, the recruitment pool for rebellion is reduced. The proxy used here is the index for ethno-linguistic fractionalization. 
+
+To quantify grievance, the authors consider the following proxies:
+
+1) Ethnic and religious hatreds: Co-existence of multiple ethnicities and multiple religions in society can lead to conflicts. More specifically, inter-group tensions can be chalked up to polarization (more so than diversity).
+
+2) Political Repression: Unless the degree of political repression is extreme, repression increases the likelihood of conflict. The authors also find a clear difference in the extents of political rights between conflict and peace episodes. 
+
+3) Political Exclusion: Counter-intuitively, the smaller the majority, the more exclusion the minority experiences. The plausible explanation for this is that the larger the minority, the greater the incentive for the majority to exploit the disparity in the population.
+
+4) Economic Inequality: The poor will resort to conflict in order to reset the wealth distribution and the rich engage in inciting conflicts to pre-empt the aforementioned conflicts by the poor.
+
+## 2.2 Regression Analysis
+
+Models  are developed which predict the risk of civil war in a five-year period using logistic regression. Two models are developed - one using proxies for opportunity, and one using proxies for grievances. The two are compared and an integrated model is arrived at. 
+
+
+```{r read-data}
+
+setwd(".")
+options("scipen"=100, "digits"=4)
+
+data <- read.dta("data/G&G.dta")
+```
+
+```{r helper-functions}
+summarize_into_table <- function(summary_obj)
+{
+  #takes summary object as input, and returns a DF res. 
+  #to print res, use print(summ(obj), quote = FALSE) is you don't want quotes
+  
+  options(digits = 4)
+  res <- t(round(summary_obj$coefficients, digits = 4))
+  z.values <- res[4,]
+  Signif <- symnum(z.values, corr = FALSE, na = FALSE, cutpoints = c(0, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ""))
+  res <- rbind(res, Signif)
+  res <- t(res)
+  res <- res[-1,]
+  res
+}
+
+comma_sep = function(x) {
+    x = strsplit(x, "")
+}
+
+convert2dArrayToDf = function(all_tests) {
+  model_names <- all_tests[,1]
+
+  invisible(apply(all_tests, 2, as.numeric))
+  invisible(sapply(all_tests, as.numeric))
+  class(all_tests) <- "numeric"
+  storage.mode(all_tests) <- "numeric"
+  
+  all_tests <- as.data.frame(all_tests)
+  
+  all_tests[,1] <- model_names
+  
+  return(all_tests)
+}
+
+```
+
+### 2.2.1 Opportunity Model
+
+We first explore the intuition behind the choice of features for each regression model:
+
+The first regression model excludes the “per capita” feature because this feature is highly correlated with the “enrollment in secondary schooling” feature. The diaspora measures are only available for 29 war episodes and hence are not explored for the first three regression models. (688 episodes from 123 countries)
+
+Due to certain technicalities which are explained below, a dummy feature called “Previous War” was added in the first regression model. This feature is removed in the second regression model and all the other features remain the same. (688 episodes from 123 countries)
+
+The third regression model replaces the “secondary schooling” feature with the “per capita income” feature (reverse of column 2). (750 episodes from 125 countries)
+
+The fourth regression model introduces the “Diaspora/peace” feature and removes the “Post-coldwar”, “Male secondary schooling”,”Previous War”,”Mountainous terrain”, “Geographic dispersion” and “Social fractionalization” features. These features were removed because it was found that they did not add significant explanatory power and it was imperative to preserve the sample size. (29 episodes)
+
+The “Diaspora/peace” feature is decomposed into two features which were computed as the difference between the actual diaspora and the estimated population of the diaspora had three been no conflict. The rest of the features remain the same as the fourth model. 
+
+
+```{r opportunity-model}
+#Opportunity Models
+
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,prevwara,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,lngdp_,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,diaspeaa",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,difdpeaa,diahpeaa")
+
+regression_formula_list <- list(
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + prevwara + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + lngdp_ + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + diaspeaa",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + difdpeaa + diahpeaa")
+
+
+for (i in c(1:5)) {
+  print(paste0("Opportunity Model ", i))
+
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  print(filtering_columns)
+  opportunity.data <- data[, filtering_columns]
+
+  opportunity.data <- na.omit(opportunity.data)
+  print(paste0("N : ", nrow(opportunity.data)))
+  print(paste0("No of wars : ", nrow(opportunity.data[opportunity.data$warsa == 1,])))
+
+  opportunity_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = opportunity.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(opportunity_fit), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(opportunity_fit), digits=2)))
+
+  print(summarize_into_table(summary(opportunity_fit)), quote = FALSE)
+}
+```
+
+Now, we explore the explanatory strength of each feature as per the result of the regression analysis of these models:
+
+1) Primary commodity exports: highly significant.
+2) End of the Cold War: expected sign but insignificant.
+3) Secondary Schooling: significant with expected sign.
+4) GDP Growth: significant with expected sign.
+5) Number of months since previous conflict: borderline significant with dummy variable, highly significant after dummy variable is dropped.
+6) Mountainous Terrain: Marginally significant.
+7) Population dispersion: Marginally significant.
+8) Social fractionalization: Marginally significant.
+9) Per Capita: Highly significant with negative sign.
+10) Diaspora/Peace: Significant and positive sign.
+11) Corrected Diaspora features: Significant with positive sign.
+
+The only comparison across regression models is between the second and third regression models: Model 2 gives a better fit whereas Model 3 permits a slightly larger sample. 
+
+
+### 2.2.2 Grievance Model
+
+Three models are learnt for grievance. In the first model, we exclude income inequality and land inequality due to sample size. We introduce them in the second and third model respectively. We see that ethnic fractionalization is significant, as is democracy (the more repressed the population is, the higher the chance of rebellion). The time since the previous conflict is also highly significant, while income inequality and land inequality is insignificant. 
+
+```{r grievance-model}
+#Grievance Models
+
+filtering_columns_list <- list(
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,ygini",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,lgini")
+
+regression_formula_list <- list(
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + ygini",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + lgini")
+
+
+for (i in c(1:3)) {
+  print(paste0("Grievance Model ", i))
+
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  print(filtering_columns)
+  grievance.data <- data[, filtering_columns]
+
+  grievance.data <- na.omit(grievance.data)
+  print(paste0("N : ", nrow(grievance.data)))
+  print(paste0("No of wars : ", nrow(grievance.data[grievance.data$warsa == 1,])))
+
+  grievance_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = grievance.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(grievance_fit), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(grievance_fit), digits=2)))
+
+  print(summarize_into_table(summary(grievance_fit)), quote = FALSE)
+}
+```
+
+### 2.2.3 Combined Model
+
+The authors use 7 regression models. Let us first explore the parameters chosen in each model and the reason for doing so:
+
+1. The first model is essentially the opportunity model with "Male secondary schooling" and no "GDP per capita" (since both cannot co-exist due to their high correlation).
+2. The second model is the grievance model with all the corresponding features.
+3. The third model is the combined model which contains all the features pertaining to both opportunity and grievance.
+4. We remove the feature "inequality" in the fourth model because it is consistently insignificant.
+5. The following insignificant features are removed in the fifth model: "post Cold War", "religious fractionalization", "democracy", "polarization", "ethnic fractionalization" and   "mountainous terrain".
+6. The sixth model is the same as the fifth model but with "per capita" instead of "secondary enrollment".
+7. The seventh model explores various types of primary commodities and chooses features which conform well with this segregation.
+
+
+```{r combied-model}
+#Combined Models
+
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,grievxb",
+  "warsa,peace,mount,geogia,lnpop,elfo,rf,pol16,etdo4590,dem,greedxb",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem,ygini",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,lngdp_,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590,oilsxp,oilsxp2")
+
+regression_formula_list <- list(
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + grievxb",
+  "warsa ~  peace + mount + geogia + lnpop + elfo + rf + pol16 + etdo4590 + dem + greedxb",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem + ygini",
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + lngdp_ + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590 +  oilsxp + oilsxp2")
+
+
+for (i in c(1:7)) {
+  print(paste0("Combined Model ", i))
+
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  print(filtering_columns)
+  combined.data <- data[, filtering_columns]
+
+  combined.data <- na.omit(combined.data)
+  print(paste0("N : ", nrow(combined.data)))
+  print(paste0("No of wars : ", nrow(combined.data[combined.data$warsa == 1,])))
+
+  combined_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = combined.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(combined_fit), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(combined_fit), digits=2)))
+
+  print(summarize_into_table(summary(combined_fit)), quote = FALSE)
+}
+```
+
+After analyzing the effect of each feature and its explanatory power, the authors conclude that only one proxy for grievance, namely "ethnic dominance" is worth including in the combined model. Within the proxies for rebel military advantage (which is in-turn a proxy for the opportunity model), the only features which survive are "population dispersion" and "social fractionalization". The proxies for foregone earnings are deemed significant and are retained. All features related to diasporas and the Cold War are excluded.
+
+## 2.3 Robustness Checks 
+
+We replicate the robustness checks with respect to any outliers in the data, and the definitions of certain dependent and independent variables. 
+
+1. We check the characteristics of the sample in which conflict occurs. We find two cases that are atypical:
+The events in Iran and Romania both have high secondary schooling rates as compared to other events. We remove these events from the data, and the results of the regression improves. 
+2. There are four events where there was highly negative economic growth before the conflict. We remove these events as well, and find that the growth rate of a country is still significant. Thus, we conclude, that conflict does not arise solely due to a sudden collapse in the economy but also through a sustained period of slow growth.
+3. We also remove certain significant events as defined by Pregibon (1981), and find that the fit of the model improves and the coefficients remain significant. 
+4. We also need to determine whether a country has several short wars with periods of peace in between or one long war. We reclassify wars as continuous which have shorter than one month of peace and then those with peace shorter than 1 year. We do not find any significant changes to the model except that the growth rate becomes marginally insignificant. 
+
+
+```{r robustness-check}
+#Robustness Check 1
+robustness.data <- data %>% select(warsa, country, year, sxp, sxp2, secm, gy1, peace, geogia, frac, etdo4590, lnpop)
+
+for (i in c(1:6)) {
+  print(paste0("Robustness Check ", i))
+
+  if(i == 1) {
+    robustness.subdata <- robustness.data %>% filter(country != 'Iran') %>% filter(country != 'Romania')
+  }
+  
+  if(i == 2) {
+    robustness.subdata <- robustness.data %>% filter(country != 'Iran') %>% filter(country != 'Romania')  %>% filter(!(country == 'Angola' & year == '1975'))  %>% filter(!(country == 'Iraq' & year == '1985')) %>% filter(!(country == 'Zaire' & year == '1995'))
+  }
+  
+  if(i == 3) {
+    robustness.subdata <- robustness.data  %>% filter(!(country == 'Iran' & year == '1970'))  %>% filter(!(country == 'Romania' & year == '1985')) %>% filter(!(country == 'Congo' & year == '1995'))
+  }
+  
+  if(i == 4) {
+    robustness.subdata <- robustness.data  %>% filter(country != 'Saudi Arabia') %>% filter(country != 'Guyana') %>% filter(country != 'Oman') %>% filter(country != 'Trinidad and Tobago') 
+  }
+  
+  if(i == 5) {
+    robustness.subdata<- robustness.data  %>% filter(!(country == 'Angola' & year == '1975'))  %>% filter(!(country == 'Somalia' & year == '1985'))
+  }
+  
+  if(i == 6) {
+    robustness.subdata <- robustness.data  %>% filter(!(country == 'Angola' & year == '1975'))  %>% filter(!(country == 'Somalia' & year == '1985')) %>% filter(!(country == 'Mozambique' & year == '1975')) %>% filter(!(country == 'Sierra Leone' & year == '1995')) %>% filter(!(country == 'Zaire' & year == '1995'))
+  }
+  
+  robustness.1.data <- na.omit(robustness.subdata)
+  print(paste0("N : ", nrow(robustness.subdata)))
+  print(paste0("No of wars : ", nrow(robustness.subdata[robustness.subdata$warsa == 1,])))
+
+  robustness.subdata <- glm(warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + frac + etdo4590 + lnpop, family=binomial(link="logit"), data = robustness.1.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(robustness.subdata), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(robustness.subdata), digits=2)))
+
+  print(summarize_into_table(summary(robustness.subdata)), quote =FALSE)
+}
+```
+# 3. Challenges
+
+The challenges we faced during replication are as follows:
+
+1) The paper explores Estimation issues during the robustness checks which include random effects, fixed effects, time effects, and rare events logits. The paper doesn’t mention which variables are used to induce this randomness, and thus could not be replicated. 
+2) Measurements are taken at each 5 year period, however during robustness checks some conflicts fall in the middle of a period, and thus we need to decide which five year period to take into account. We do this through trial and error to arrive at the same results as the paper. 
+
+# 4. Extending the original study
+
+## 4.1 In sample testing
+
+In sample testing is done for all the models (opportunity, grievance and combined). The Specificity, Sensitivity, AUC, and Accuracy are recorded at thresholds 0.1 and 0.5
+
+
+```{r reading-data-ext1}
+
+all_tests <- matrix(data=0, nrow=15, ncol=5)
+colnames(all_tests) <- c("model", "sens", "spec", "auc", "accuracy")
+
+thresholding_flag = TRUE
+sens_index <- 2
+spec_index <- 3
+auc_index <- 4
+accuracy_index <- 5
+all_tests_index <- 1
+
+```
+
+### 4.1.1 Opportunity Model testing
+
+
+```{r opportunity-model-ext1}
+#Opportunity Models
+opportunity_model <- function(threshold_value){
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,prevwara,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,lngdp_,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,diaspeaa",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,difdpeaa,diahpeaa")
+
+regression_formula_list <- list(
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + prevwara + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + lngdp_ + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + diaspeaa",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + difdpeaa + diahpeaa")
+
+
+for (i in c(1:5)) {
+  
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  opportunity.data <- data[, filtering_columns]
+  
+  testData <- opportunity.data
+  trainData <- opportunity.data
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+
+  opportunity_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+  
+  opportunity_predict <- predict(opportunity_fit, newdata=testData, type="response")
+  
+  opportunity_y.hat <- as.matrix(opportunity_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[all_tests_index,1] <- paste(c("opportunity",i), collapse = '.')
+  if(thresholding_flag == TRUE) {
+    
+    opportunity_y.hat_normalized <- opportunity_y.hat
+    
+    opportunity_y.hat_normalized[opportunity_y.hat_normalized >= threshold_value] <- 1
+    opportunity_y.hat_normalized[opportunity_y.hat_normalized < threshold_value] <- 0
+    
+    opp_predict_normalized <- prediction(opportunity_y.hat_normalized, y)
+
+    len <- length(opp_predict_normalized@fp[[1]])
+    fp <- as.numeric(opp_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(opp_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(opp_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(opp_predict_normalized@tn[[1]][[len - 1]])
+    
+    all_tests[all_tests_index,sens_index] <- tp / (tp + fn)
+    all_tests[all_tests_index,spec_index] <- tn / (tn + fp)
+    
+    all_tests[all_tests_index,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+    
+    opp_predict <- prediction(opportunity_y.hat, y)
+    opp_auc <- performance(opp_predict, measure = "auc")
+    all_tests[all_tests_index,auc_index] <- as.numeric(unlist(slot(opp_auc,"y.values")))
+    all_tests_index <- all_tests_index + 1
+  } else {
+  
+    opp_predict <- prediction(opportunity_y.hat, y)
+
+    opp_f <- performance(opp_predict , measure = "f")
+    opp_where.F <- which.max(as.numeric(unlist(slot(opp_f,"y.values"))))
+    opp_what.F <- performance(opp_predict, measure="sens", x.measure="spec")
+  
+    all_tests[all_tests_index,sens_index] <- as.numeric(unlist(slot(opp_what.F,"y.values")))[opp_where.F]
+    all_tests[all_tests_index,spec_index] <- as.numeric(unlist(slot(opp_what.F,"x.values")))[opp_where.F]
+  
+    opp_auc <- performance(opp_predict, measure = "auc")
+    all_tests[all_tests_index,auc_index] <- as.numeric(unlist(slot(opp_auc,"y.values")))
+    all_tests_index <- all_tests_index + 1
+  }
+}
+return(all_tests)
+}
+temp1_1<- opportunity_model(0.1)
+temp1_2<- opportunity_model(0.5)
+print("For threshold = 0.1 :")
+print(temp1_1[1:5,])
+print("For threshold = 0.5 :")
+print(temp1_2[1:5,])
+```
+
+### 4.1.2 Grievance Model testing
+
+
+```{r grievance-model-ext1}
+#Grievance Models
+grievance_model <- function(threshold_value){
+filtering_columns_list <- list(
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,ygini",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,lgini")
+
+regression_formula_list <- list(
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + ygini",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + lgini")
+
+
+for (i in c(1:3)) {
+    
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  grievance.data <- data[, filtering_columns]
+  
+  testData <- grievance.data
+  trainData <- grievance.data
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+  
+  grievance_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+   
+  grievance_predict <- predict(grievance_fit, newdata=testData, type="response")
+  
+  grievance_y.hat <- as.matrix(grievance_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[all_tests_index,1] <- paste(c("grievance",i), collapse = '.')
+  
+  if(thresholding_flag == TRUE) {
+    grievance_y.hat_normalized <- grievance_y.hat
+    
+    grievance_y.hat_normalized[grievance_y.hat_normalized >= threshold_value] <- 1
+    grievance_y.hat_normalized[grievance_y.hat_normalized < threshold_value] <- 0
+    
+    griev_predict_normalized <- prediction(grievance_y.hat_normalized, y)
+  
+    len <- length(griev_predict_normalized@fp[[1]])
+    fp <- as.numeric(griev_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(griev_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(griev_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(griev_predict_normalized@tn[[1]][[len - 1]])
+  
+    all_tests[all_tests_index,sens_index] <- tp / (tp + fn)
+    all_tests[all_tests_index,spec_index] <- tn / (tn + fp)
+    
+    all_tests[all_tests_index,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+    
+    griev_predict <- prediction(grievance_y.hat, y)
+    griev_auc <- performance(griev_predict, measure = "auc")
+    all_tests[all_tests_index,auc_index] <- as.numeric(unlist(slot(griev_auc,"y.values")))
+    all_tests_index <- all_tests_index + 1
+  } else {
+    
+    griev_predict <- prediction(grievance_y.hat, y)
+
+    griev_f <- performance(griev_predict , measure = "f")
+    griev_where.F <- which.max(as.numeric(unlist(slot(griev_f,"y.values"))))
+    griev_what.F <- performance(griev_predict, measure="sens", x.measure="spec")
+    
+    all_tests[all_tests_index,sens_index] <- as.numeric(unlist(slot(griev_what.F,"y.values")))[griev_where.F]
+    all_tests[all_tests_index,spec_index] <- as.numeric(unlist(slot(griev_what.F,"x.values")))[griev_where.F]
+    
+    griev_auc <- performance(griev_predict, measure = "auc")
+    all_tests[all_tests_index,auc_index] <- as.numeric(unlist(slot(griev_auc,"y.values")))  
+    all_tests_index <- all_tests_index + 1
+  }
+  
+} 
+return(all_tests)
+}
+temp2_1<- grievance_model(0.1)
+temp2_2<- grievance_model(0.5)
+
+print("For threshold = 0.1 :")
+print(temp2_1[1:3,])
+print("For threshold = 0.5 :")
+print(temp2_2[1:3,])
+
+```
+
+### 4.1.3 Combined Model testing
+Generating the combined opportunity and grievance models
+
+```{r combied-model-ext1}
+#Combined Models
+combined_model <- function(threshold_value){
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,grievxb",
+  "warsa,peace,mount,geogia,lnpop,elfo,rf,pol16,etdo4590,dem,greedxb",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem,ygini",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,lngdp_,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590,oilsxp,oilsxp2")
+
+regression_formula_list <- list(
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + grievxb",
+  "warsa ~  peace + mount + geogia + lnpop + elfo + rf + pol16 + etdo4590 + dem + greedxb",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem + ygini",
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + lngdp_ + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590 +  oilsxp + oilsxp2")
+
+
+for (i in c(1:7)) {
+  
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  combined.data <- data[, filtering_columns]
+  
+  testData <- combined.data
+  trainData <- combined.data
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+
+  combined_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+  
+  combined_predict <- predict(combined_fit, newdata=testData, type="response")
+  
+  combined_y.hat <- as.matrix(combined_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[all_tests_index,1] <- paste(c("combined",i), collapse = '.')
+  
+  if(thresholding_flag == TRUE) {
+    combined_y.hat_normalized <- combined_y.hat
+    
+    combined_y.hat_normalized[combined_y.hat_normalized >= threshold_value] <- 1
+    combined_y.hat_normalized[combined_y.hat_normalized < threshold_value] <- 0
+    
+    comb_predict_normalized <- prediction(combined_y.hat_normalized, y)
+  
+    len <- length(comb_predict_normalized@fp[[1]])
+    fp <- as.numeric(comb_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(comb_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(comb_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(comb_predict_normalized@tn[[1]][[len - 1]])
+    
+    all_tests[all_tests_index,sens_index] <- tp / (tp + fn)
+    all_tests[all_tests_index,spec_index] <- tn / (tn + fp)
+    
+    all_tests[all_tests_index,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+    
+    comb_predict <- prediction(combined_y.hat, y)
+    comb_auc <- performance(comb_predict, measure = "auc")
+    all_tests[all_tests_index,auc_index] <- as.numeric(unlist(slot(comb_auc,"y.values")))
+    all_tests_index <- all_tests_index + 1
+  } else {
+    
+    comb_predict <- prediction(combined_y.hat, y)
+    
+    comb_f <- performance(comb_predict , measure = "f")
+    comb_where.F <- which.max(as.numeric(unlist(slot(comb_f,"y.values"))))
+    comb_what.F <- performance(comb_predict, measure="sens", x.measure="spec")
+    
+    all_tests[all_tests_index,sens_index] <- as.numeric(unlist(slot(comb_what.F,"y.values")))[comb_where.F]
+    all_tests[all_tests_index,spec_index] <- as.numeric(unlist(slot(comb_what.F,"x.values")))[comb_where.F]
+    
+    comb_auc <- performance(comb_predict, measure = "auc")
+    all_tests[all_tests_index,auc_index] <- as.numeric(unlist(slot(comb_auc,"y.values")))
+    all_tests_index <- all_tests_index + 1 
+  }
+} 
+return(all_tests)
+}
+temp3_1<- combined_model(0.1)
+temp3_2<- combined_model(0.5)
+
+print("For threshold = 0.1 :")
+print(temp3_1[1:7,])
+print("For threshold = 0.5 :")
+print(temp3_2[1:7,])
+
+```
+
+
+```{r final-result-ext1}
+# print("Results for threshold = 0.1")
+
+# print("Opportunity Models")
+# print(temp1_1)
+# print("Grievance Models")
+# print(temp2_1)
+# print("Combined Models")
+# print(temp3_1)
+# 
+# print("Results for threshold = 0.5")
+# 
+# print("Opportunity Models")
+# print(temp1_2)
+# print("Grievance Models")
+# print(temp2_2)
+# print("Combined Models")
+# print(temp3_2)
+```
+
+## 4.2 Out-sample testing
+
+Out sample testing is done for all the models (opportunity, grievance and combined). The Specificity, Sensitivity, AUC, and Accuracy are recorded at thresholds 0.1 and 0.5. 5-fold crossvalidation is used. 
+
+
+```{r k-fold validation-ext2}
+k <- 5
+
+all_tests <- matrix(data=0, nrow=15 * k, ncol=6)
+colnames(all_tests) <- c("model", "test_index", "sens", "spec", "auc", "accuracy")
+
+set.seed(42)
+shuffled_data <- data[sample(nrow(data)),]
+folds <- cut(seq(1, nrow(shuffled_data)), breaks=k, labels=FALSE)
+
+thresholding_flag = TRUE
+#threshold_value = as.numeric(params$threshold)
+
+sens_index <- 3
+spec_index <- 4
+auc_index <- 5
+accuracy_index <- 6
+```
+
+### 4.2.1 Opportunity Model testing
+
+```{r opportunity-model-ext2}
+#Opportunity Models
+opportunity_model <- function(threshold_value){
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,prevwara,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,lngdp_,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,diaspeaa",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,difdpeaa,diahpeaa")
+
+regression_formula_list <- list(
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + prevwara + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + lngdp_ + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + diaspeaa",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + difdpeaa + diahpeaa")
+
+
+for (i in c(1:5)) {
+  
+  for(testIndex in 1:k){
+    
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  opportunity.data <- shuffled_data[, filtering_columns]
+  
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds == testIndex,arr.ind=TRUE)
+  testData <- opportunity.data[testIndexes, ]
+  trainData <- opportunity.data[-testIndexes, ]
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+
+  opportunity_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+  
+  opportunity_predict <- predict(opportunity_fit, newdata=testData, type="response")
+  
+  opportunity_y.hat <- as.matrix(opportunity_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[(i-1)*k + testIndex,1] <- paste(c("opportunity",i), collapse = '.')
+  all_tests[(i-1)*k + testIndex,2] <- as.numeric(testIndex)
+  
+  if(thresholding_flag == TRUE) {
+    
+    opportunity_y.hat_normalized <- opportunity_y.hat
+    
+    opportunity_y.hat_normalized[opportunity_y.hat_normalized >= threshold_value] <- 1
+    opportunity_y.hat_normalized[opportunity_y.hat_normalized < threshold_value] <- 0
+    
+    opp_predict_normalized <- prediction(opportunity_y.hat_normalized, y)
+
+    len <- length(opp_predict_normalized@fp[[1]])
+    fp <- as.numeric(opp_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(opp_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(opp_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(opp_predict_normalized@tn[[1]][[len - 1]])
+    
+    all_tests[(i-1)*k + testIndex,sens_index] <- tp / (tp + fn)
+    all_tests[(i-1)*k + testIndex,spec_index] <- tn / (tn + fp)
+    
+    all_tests[(i-1)*k + testIndex,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+  
+    opp_predict <- prediction(opportunity_y.hat, y)
+    opp_auc <- performance(opp_predict, measure = "auc")
+    all_tests[(i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(opp_auc,"y.values")))
+    
+  } else {
+  
+    opp_predict <- prediction(opportunity_y.hat, y)
+
+    opp_f <- performance(opp_predict , measure = "f")
+    opp_where.F <- which.max(as.numeric(unlist(slot(opp_f,"y.values"))))
+    opp_what.F <- performance(opp_predict, measure="sens", x.measure="spec")
+  
+    all_tests[(i-1)*k + testIndex,sens_index] <- as.numeric(unlist(slot(opp_what.F,"y.values")))[opp_where.F]
+    all_tests[(i-1)*k + testIndex,spec_index] <- as.numeric(unlist(slot(opp_what.F,"x.values")))[opp_where.F]
+  
+    opp_auc <- performance(opp_predict, measure = "auc")
+    all_tests[(i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(opp_auc,"y.values")))
+    
+  }
+  
+  }
+  
+}
+
+lower_lim = 1
+upper_lim = 5*k
+return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
+}
+temp1_1<- opportunity_model(0.1)
+temp1_2<- opportunity_model(0.5)
+
+print("For threshold = 0.1 :")
+print(temp1_1)
+print("For threshold = 0.5 :")
+print(temp1_2)
+
+```
+
+### 4.2.2 Grievance Model testing
+
+```{r grievance-model-ext2}
+#Grievance Models
+#Grievance Models
+grievance_model <- function(threshold_value){
+filtering_columns_list <- list(
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,ygini",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,lgini")
+
+regression_formula_list <- list(
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + ygini",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + lgini")
+
+
+for (i in c(1:3)) {
+  
+  for(testIndex in 1:k){
+    
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  grievance.data <- shuffled_data[, filtering_columns]
+  
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds == testIndex,arr.ind=TRUE)
+  testData <- grievance.data[testIndexes, ]
+  trainData <- grievance.data[-testIndexes, ]
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+  
+  grievance_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+   
+  grievance_predict <- predict(grievance_fit, newdata=testData, type="response")
+  
+  grievance_y.hat <- as.matrix(grievance_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[5 * k + (i-1)*k + testIndex,1] <- paste(c("grievance",i), collapse = '.')
+  all_tests[5 * k + (i-1)*k + testIndex,2] <- as.numeric(testIndex)
+  
+  if(thresholding_flag == TRUE) {
+    grievance_y.hat_normalized <- grievance_y.hat
+    
+    grievance_y.hat_normalized[grievance_y.hat_normalized >= threshold_value] <- 1
+    grievance_y.hat_normalized[grievance_y.hat_normalized < threshold_value] <- 0
+    
+    griev_predict_normalized <- prediction(grievance_y.hat_normalized, y)
+  
+    len <- length(griev_predict_normalized@fp[[1]])
+    fp <- as.numeric(griev_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(griev_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(griev_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(griev_predict_normalized@tn[[1]][[len - 1]])
+  
+    all_tests[5 * k + (i-1)*k + testIndex,sens_index] <- tp / (tp + fn)
+    all_tests[5 * k + (i-1)*k + testIndex,spec_index] <- tn / (tn + fp)
+    
+    all_tests[5 * k + (i-1)*k + testIndex,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+    
+    griev_predict <- prediction(grievance_y.hat, y)
+    griev_auc <- performance(griev_predict, measure = "auc")
+    all_tests[5 * k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(griev_auc,"y.values")))
+    
+  } else {
+    
+    griev_predict <- prediction(grievance_y.hat, y)
+
+    griev_f <- performance(griev_predict , measure = "f")
+    griev_where.F <- which.max(as.numeric(unlist(slot(griev_f,"y.values"))))
+    griev_what.F <- performance(griev_predict, measure="sens", x.measure="spec")
+    
+    all_tests[5 * k + (i-1)*k + testIndex,sens_index] <- as.numeric(unlist(slot(griev_what.F,"y.values")))[griev_where.F]
+    all_tests[5 * k + (i-1)*k + testIndex,spec_index] <- as.numeric(unlist(slot(griev_what.F,"x.values")))[griev_where.F]
+    
+    griev_auc <- performance(griev_predict, measure = "auc")
+    all_tests[5 * k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(griev_auc,"y.values")))  
+    
+  }
+  
+  }
+  
+}
+
+lower_lim = 5*k + 1
+upper_lim = 5*k + 3*k
+return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
+}
+temp2_1<- grievance_model(0.1)
+temp2_2<- grievance_model(0.5)
+
+print("For threshold = 0.1 :")
+print(temp2_1)
+print("For threshold = 0.5 :")
+print(temp2_2)
+
+```
+
+### 4.2.3 Combined Model testing
+
+```{r combied-model-ext2}
+#Combined Models
+combined_model <- function(threshold_value){
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,grievxb",
+  "warsa,peace,mount,geogia,lnpop,elfo,rf,pol16,etdo4590,dem,greedxb",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem,ygini",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,lngdp_,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590,oilsxp,oilsxp2")
+
+regression_formula_list <- list(
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + grievxb",
+  "warsa ~  peace + mount + geogia + lnpop + elfo + rf + pol16 + etdo4590 + dem + greedxb",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem + ygini",
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + lngdp_ + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590 +  oilsxp + oilsxp2")
+
+
+for (i in c(1:7)) {
+  
+  for(testIndex in 1:k){
+  
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  combined.data <- shuffled_data[, filtering_columns]
+  
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds == testIndex,arr.ind=TRUE)
+  testData <- combined.data[testIndexes, ]
+  trainData <- combined.data[-testIndexes, ]
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+
+  combined_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+  
+  combined_predict <- predict(combined_fit, newdata=testData, type="response")
+  
+  combined_y.hat <- as.matrix(combined_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[(5+3)*k + (i-1)*k + testIndex,1] <- paste(c("combined",i), collapse = '.')
+  all_tests[(5+3)*k + (i-1)*k + testIndex,2] <- as.numeric(testIndex)
+  
+  if(thresholding_flag == TRUE) {
+    combined_y.hat_normalized <- combined_y.hat
+    
+    combined_y.hat_normalized[combined_y.hat_normalized >= threshold_value] <- 1
+    combined_y.hat_normalized[combined_y.hat_normalized < threshold_value] <- 0
+    
+    comb_predict_normalized <- prediction(combined_y.hat_normalized, y)
+  
+    len <- length(comb_predict_normalized@fp[[1]])
+    fp <- as.numeric(comb_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(comb_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(comb_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(comb_predict_normalized@tn[[1]][[len - 1]])
+    
+    all_tests[(5+3)*k + (i-1)*k + testIndex,sens_index] <- tp / (tp + fn)
+    all_tests[(5+3)*k + (i-1)*k + testIndex,spec_index] <- tn / (tn + fp)
+    
+    all_tests[(5+3)*k + (i-1)*k + testIndex,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+    
+    comb_predict <- prediction(combined_y.hat, y)
+    comb_auc <- performance(comb_predict, measure = "auc")
+    all_tests[(5+3)*k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(comb_auc,"y.values")))
+    
+  } else {
+    
+    comb_predict <- prediction(combined_y.hat, y)
+    
+    comb_f <- performance(comb_predict , measure = "f")
+    comb_where.F <- which.max(as.numeric(unlist(slot(comb_f,"y.values"))))
+    comb_what.F <- performance(comb_predict, measure="sens", x.measure="spec")
+    
+    all_tests[(5+3)*k + (i-1)*k + testIndex,sens_index] <- as.numeric(unlist(slot(comb_what.F,"y.values")))[comb_where.F]
+    all_tests[(5+3)*k + (i-1)*k + testIndex,spec_index] <- as.numeric(unlist(slot(comb_what.F,"x.values")))[comb_where.F]
+    
+    comb_auc <- performance(comb_predict, measure = "auc")
+    all_tests[(5+3)*k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(comb_auc,"y.values")))
+  
+  }
+  
+  }
+}
+
+lower_lim = 5*k + 3*k + 1
+upper_lim = 5*k + 3*k + 7*k
+return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
+}
+temp3_1<- combined_model(0.1)
+temp3_2<- combined_model(0.5)
+
+print("For threshold = 0.1 :")
+print(temp3_1)
+print("For threshold = 0.5 :")
+print(temp3_2)
+
+```
+
+### 4.2.4 Computing Averages of the k-fold Validation
+
+```{r averaging-results-ext2}
+# print("Results for threshold = 0.1")
+# 
+# print("Opportunity Models")
+# print(temp1_1)
+# print("Grievance Models")
+# print(temp2_1)
+# print("Combined Models")
+# print(temp3_1)
+
+all_tests[1:25,] <- as.matrix(temp1_1)
+all_tests[26:40,] <- as.matrix(temp2_1)
+all_tests[41:75,] <- as.matrix(temp3_1)
+
+all_tests <- convert2dArrayToDf(all_tests)
+
+result <- aggregate(all_tests[, 3:6], list(all_tests$model), mean)
+
+names(result)[1]<-"model"
+print("Averaged K-Means results (for threshold=0.1)")
+print(result)
+
+
+# print("For threshold value = 0.5")
+
+all_tests <- matrix(data=0, nrow=15 * k, ncol=6)
+colnames(all_tests) <- c("model", "test_index", "sens", "spec", "auc", "accuracy")
+
+all_tests[1:25,] <- as.matrix(temp1_2)
+all_tests[26:40,] <- as.matrix(temp2_2)
+all_tests[41:75,] <- as.matrix(temp3_2)
+
+all_tests <- convert2dArrayToDf(all_tests)
+
+result <- aggregate(all_tests[, 3:6], list(all_tests$model), mean)
+
+names(result)[1]<-"model"
+print("Averaged K-Means results (for threshold=0.5)")
+print(result)
+
+
+#write.csv(result, file = paste0("Project_Extension_2_Threshold_", params$threshold, ".csv"))
+```
+
+## 4.3 Regularized Model
+
+descriptiion lorum impsonvefonvefv
+
+```{r reading-data-ext3}
+
+k <- 5
+
+all_tests <- matrix(data=0, nrow=k, ncol=6)
+colnames(all_tests) <- c("model", "test_index", "sens", "spec", "auc", "accuracy")
+
+set.seed(42)
+shuffled_data <- data[sample(nrow(data)),]
+folds <- cut(seq(1, nrow(shuffled_data)), breaks=k, labels=FALSE)
+
+thresholding_flag = TRUE
+
+sens_index <- 3
+spec_index <- 4
+auc_index <- 5
+accuracy_index <- 6
+
+```
+
+```{r regularized-model-ext3}
+reg_model <- function(threshold_value){
+for(testIndex in 1:k){
+  
+  regularized.data <- shuffled_data %>% select(warsa, coldwar, prevwara, peace, elfo, rf, frac, geogia, mount, lnpop, sxp, sxp2, dem, ygini, lgini, lngdp_, gy1, secm, diaspeaa, difdpeaa, diahpeaa, pol16, oilsxp, oilsxp2, etdo4590)
+  
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds == testIndex,arr.ind=TRUE)
+  testData <- regularized.data[testIndexes, ]
+  trainData <- regularized.data[-testIndexes, ]
+  
+  trainData <- na.omit(trainData)
+  testData <- na.omit(testData)
+  
+  train_x <- as.matrix(trainData[, 2:ncol(trainData)])
+  train_y <- as.matrix(trainData$warsa)
+  
+  test_x <- as.matrix(testData[, 2:ncol(testData)])
+  test_y <- as.matrix(testData$warsa)
+
+  regularized_fit <- cv.glmnet(x=train_x, y=train_y, family="binomial", type.measure="auc")
+  regularized_predict <- predict(regularized_fit, test_x, type="response", s="lambda.min")
+  
+  regularized_y.hat <- as.matrix(regularized_predict)
+
+  all_tests[testIndex,1] <- paste(c("regularized"), collapse = '.')
+  all_tests[testIndex,2] <- as.numeric(testIndex)
+  
+  regularized_y.hat_normalized <- regularized_y.hat
+    
+  regularized_y.hat_normalized[regularized_y.hat_normalized >= threshold_value] <- 1
+  regularized_y.hat_normalized[regularized_y.hat_normalized < threshold_value] <- 0
+  
+  regularized_predict_normalized <- prediction(regularized_y.hat_normalized, test_y)
+
+  len <- length(regularized_predict_normalized@fp[[1]])
+  fp <- as.numeric(regularized_predict_normalized@fp[[1]][[len - 1]])
+  tp <- as.numeric(regularized_predict_normalized@tp[[1]][[len - 1]])
+  fn <- as.numeric(regularized_predict_normalized@fn[[1]][[len - 1]])
+  tn <- as.numeric(regularized_predict_normalized@tn[[1]][[len - 1]])
+  
+  all_tests[testIndex,sens_index] <- tp / (tp + fn)
+  all_tests[testIndex,spec_index] <- tn / (tn + fp)
+  
+  all_tests[testIndex,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+  
+  regularized_predict <- prediction(regularized_y.hat, test_y)
+  regular_auc <- performance(regularized_predict, measure = "auc")
+  all_tests[testIndex,auc_index] <- as.numeric(unlist(slot(regular_auc,"y.values")))
+}
+
+lower_lim = 1
+upper_lim = k
+return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
+}
+```
+
+```{r final-result-ext3}
+#For threshold = 0.1
+
+temp1 <- reg_model(0.1)
+all_tests[1:5,] <- as.matrix(temp1)
+all_tests <- convert2dArrayToDf(all_tests)
+result <- aggregate(all_tests[, 3:6], list(all_tests$model), mean)
+names(result)[1]<-"model"
+
+print("For threshold = 0.1")
+print(result)
+
+
+#For threshold = 0.5
+
+all_tests <- matrix(data=0, nrow=k, ncol=6)
+colnames(all_tests) <- c("model", "test_index", "sens", "spec", "auc", "accuracy")
+temp1 <- reg_model(0.5)
+all_tests[1:5,] <- as.matrix(temp1)
+all_tests <- convert2dArrayToDf(all_tests)
+result <- aggregate(all_tests[, 3:6], list(all_tests$model), mean)
+names(result)[1]<-"model"
+
+print("For threshold = 0.5")
+print(result)
+
+```
+
+## 4.4 Observations 
+
+1) The accuracy and specificity is higher, while the sensitivity is very low for models at threshold 0.5 (because the model almost always predicts 0). The accuracy and specificity decrease but the sensitivity increase dramatically at threshold 0.1. So the number of civil wars we’re actually predicting at this threshold is very low, and while the accuracy and specificity increase (because the dataset is skewed), this does not mean that this model performs better. 
+
+2) Broadly speaking, the performance of the first three opportunity models is comparable to the grievance models. However, the last two opportunity models tend to outperform even the combined models (in terms of accuracy).
+
+3) The performance of the regularized GLM is not necessarily better than the proposed models. The sensitivity of the 7th combined model is significantly better than that of the regularized model while all the other parameters are at least comparable.
+
+4) Our findings seem to conform to the authors' claim that "greed is a better indicator than grievance for predicting civil wars” 
+
+
+The following is a list of all packages used to generate these results. (Leave at very end of file.)
+
+```{r}
+sessionInfo()
+```
