@@ -1047,7 +1047,7 @@ print(result)
 A regularised model is trained on all features and the accuracy achieved is comparable to the previous models. The sensitivity decreases drastically for threshold = 0.5, even though accuracy increases. 
 
 ```{r reading-data-ext3}
-
+data <- data[!is.na(data$warsa),]
 k <- 5
 
 all_tests <- matrix(data=0, nrow=k, ncol=6)
