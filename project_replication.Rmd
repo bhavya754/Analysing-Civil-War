@@ -1,0 +1,226 @@
+---
+title: "MSD 2019 Final Project"
+subtitle: "A replication of Greed and Grievance in Civil War by Paul Collier and Anke Hoeffler, 2000"
+author: "Kiran Ramesh (kr2789), Sai Srujan Chinta (sc4401), Bhavya Shahi (bs3118)"
+date: '`r Sys.time()`'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+library(here)
+library(scales)
+library(tidyverse)
+library(foreign)
+library(DescTools)
+library(lme4)
+
+theme_set(theme_bw())
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=50),tidy=TRUE, warning = FALSE)
+```
+
+# Reading Data
+
+```{r read-data}
+
+setwd(".")
+options("scipen"=100, "digits"=4)
+
+data <- read.dta("data/G&G.dta")
+#data_war_period <- data %>% filter(warsa == 1)
+#subdata<- data %>% select(warsa, sxp, sxp2, coldwar, secm, lngdp_, gy1, peace, mount, geogia, lnpop, frac, elfo, rf, pol16, etdo4590, dem, ygini, grievxb, greedxb, oilsxp, oilsxp2)
+```
+#Helper Functions
+```{r helper-functions}
+summarize_into_table <- function(summary_obj)
+{
+  #takes summary object as input, and returns a DF res. 
+  #to print res, use print(summ(obj), quote = FALSE) is you don't want quotes
+  
+  options(digits = 4)
+  res <- t(round(summary_obj$coefficients, digits = 4))
+  z.values <- res[4,]
+  Signif <- symnum(z.values, corr = FALSE, na = FALSE, cutpoints = c(0, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ""))
+  res <- rbind(res, Signif)
+  res <- t(res)
+  res <- res[-1,]
+  res
+}
+
+comma_sep = function(x) {
+    x = strsplit(x, "")
+}
+```
+
+# Opportunity Models
+Generating the various opportunity models
+
+```{r opportunity-model}
+#Opportunity Models
+
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,prevwara,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,lngdp_,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,diaspeaa",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,difdpeaa,diahpeaa")
+
+regression_formula_list <- list(
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + prevwara + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + lngdp_ + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + diaspeaa",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + difdpeaa + diahpeaa")
+
+
+for (i in c(1:5)) {
+  print(paste0("Opportunity Model ", i))
+
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  print(filtering_columns)
+  opportunity.data <- data[, filtering_columns]
+
+  opportunity.data <- na.omit(opportunity.data)
+  print(paste0("N : ", nrow(opportunity.data)))
+  print(paste0("No of wars : ", nrow(opportunity.data[opportunity.data$warsa == 1,])))
+
+  opportunity_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = opportunity.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(opportunity_fit), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(opportunity_fit), digits=2)))
+
+  print(summarize_into_table(summary(opportunity_fit)), quote = FALSE)
+}
+```
+
+# Grievance Models
+Generating the various grievance models
+
+```{r grievance-model}
+#Grievance Models
+
+filtering_columns_list <- list(
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,ygini",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,lgini")
+
+regression_formula_list <- list(
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + ygini",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + lgini")
+
+
+for (i in c(1:3)) {
+  print(paste0("Grievance Model ", i))
+
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  print(filtering_columns)
+  grievance.data <- data[, filtering_columns]
+
+  grievance.data <- na.omit(grievance.data)
+  print(paste0("N : ", nrow(grievance.data)))
+  print(paste0("No of wars : ", nrow(grievance.data[grievance.data$warsa == 1,])))
+
+  grievance_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = grievance.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(grievance_fit), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(grievance_fit), digits=2)))
+
+  print(summarize_into_table(summary(grievance_fit)), quote = FALSE)
+}
+```
+
+# Combined Model
+Generating the combined opportunity and grievance models
+
+```{r combied-model}
+#Combined Models
+
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,grievxb",
+  "warsa,peace,mount,geogia,lnpop,elfo,rf,pol16,etdo4590,dem,greedxb",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem,ygini",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,lngdp_,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590,oilsxp,oilsxp2")
+
+regression_formula_list <- list(
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + grievxb",
+  "warsa ~  peace + mount + geogia + lnpop + elfo + rf + pol16 + etdo4590 + dem + greedxb",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem + ygini",
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + lngdp_ + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590 +  oilsxp + oilsxp2")
+
+
+for (i in c(1:7)) {
+  print(paste0("Combined Model ", i))
+
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  print(filtering_columns)
+  combined.data <- data[, filtering_columns]
+
+  combined.data <- na.omit(combined.data)
+  print(paste0("N : ", nrow(combined.data)))
+  print(paste0("No of wars : ", nrow(combined.data[combined.data$warsa == 1,])))
+
+  combined_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = combined.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(combined_fit), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(combined_fit), digits=2)))
+
+  print(summarize_into_table(summary(combined_fit)), quote = FALSE)
+}
+```
+
+# Robustness Check
+
+```{r robustness-check}
+#Robustness Check 1
+robustness.data <- data %>% select(warsa, country, year, sxp, sxp2, secm, gy1, peace, geogia, frac, etdo4590, lnpop)
+
+for (i in c(1:6)) {
+  print(paste0("Robustness Check ", i))
+
+  if(i == 1) {
+    robustness.subdata <- robustness.data %>% filter(country != 'Iran') %>% filter(country != 'Romania')
+  }
+  
+  if(i == 2) {
+    robustness.subdata <- robustness.data %>% filter(country != 'Iran') %>% filter(country != 'Romania')  %>% filter(!(country == 'Angola' & year == '1975'))  %>% filter(!(country == 'Iraq' & year == '1985')) %>% filter(!(country == 'Zaire' & year == '1995'))
+  }
+  
+  if(i == 3) {
+    robustness.subdata <- robustness.data  %>% filter(!(country == 'Iran' & year == '1970'))  %>% filter(!(country == 'Romania' & year == '1985')) %>% filter(!(country == 'Congo' & year == '1995'))
+  }
+  
+  if(i == 4) {
+    robustness.subdata <- robustness.data  %>% filter(country != 'Saudi Arabia') %>% filter(country != 'Guyana') %>% filter(country != 'Oman') %>% filter(country != 'Trinidad and Tobago') 
+  }
+  
+  if(i == 5) {
+    robustness.subdata<- robustness.data  %>% filter(!(country == 'Angola' & year == '1975'))  %>% filter(!(country == 'Somalia' & year == '1985'))
+  }
+  
+  if(i == 6) {
+    robustness.subdata <- robustness.data  %>% filter(!(country == 'Angola' & year == '1975'))  %>% filter(!(country == 'Somalia' & year == '1985')) %>% filter(!(country == 'Mozambique' & year == '1975')) %>% filter(!(country == 'Sierra Leone' & year == '1995')) %>% filter(!(country == 'Zaire' & year == '1995'))
+  }
+  
+  robustness.1.data <- na.omit(robustness.subdata)
+  print(paste0("N : ", nrow(robustness.subdata)))
+  print(paste0("No of wars : ", nrow(robustness.subdata[robustness.subdata$warsa == 1,])))
+
+  robustness.subdata <- glm(warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + frac + etdo4590 + lnpop, family=binomial(link="logit"), data = robustness.1.data)
+   
+  print(paste0("Pseudo R2 : ", round(PseudoR2(robustness.subdata), digits=2)))
+  print(paste0("Log likelihood : ", round(logLik(robustness.subdata), digits=2)))
+
+  print(summarize_into_table(summary(robustness.subdata)), quote =FALSE)
+}
+```

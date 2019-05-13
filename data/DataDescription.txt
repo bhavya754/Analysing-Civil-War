@@ -1,0 +1,31 @@
+id				Unique ID based on country
+pwtid 				
+country			Country Name (161 countries)
+year			For each country timeline from 1960 to 1995 every five years : 8 rows per country
+warsa			Whether war started in the year or not (0 or 1)
+coldwar			Whether country participated in cold war or not during that year (0 or 1)
+prevwara		Whether country was in a previous civil war prior to that year (0 or 1)
+peace			Time at peace since last civil war
+elfo			Ethnolinguistic diversity (from the original data from the Atlas Naradov Mira of 1964)	(0 to 1)
+rf				Religious Fractionalization		(0 to 1)
+frac       		Social Fractionalization
+geogia			Geographic Dispersion
+mount			Fraction of terrain that is mountainous (Log of mountainous terrain)
+lnpop			Log of Population Size
+sxp             Commodity Dependence / primary commodity exports as a percent of GDP
+sxp2			Square of sxp
+dem				Democracy Index
+ygini			Income inequality (Gini)
+lgini			Land inequality (Gini)
+lngdp_    		log of real per capita income
+gy1				GDP Growth  / growth rate of real income
+secm			Male Secondary Schooling (% in school)
+diaspeaa		Diaspora/peace
+difdpeaa		Diaspora corrected/peace
+diahpeaa		(Diaspora-diaspora corrected)/peace
+pol16			Political instability (?)	/ 	Polarization 􏰃 alpha = 1.6     (?)
+oilsxp    		Oil dummy
+oilsxp2			Square of oilsxp
+grievxb			Grievance predicted value
+greedxb			Greed predicted value
+etdo4590		Ethnic Dominance

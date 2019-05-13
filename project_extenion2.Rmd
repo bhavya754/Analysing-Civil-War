@@ -1,0 +1,400 @@
+---
+title: "MSD 2019 Final Project"
+subtitle: "An extension (out of sample testing) of Greed and Grievance in Civil War by Paul Collier and Anke Hoeffler, 2000"
+author: "Kiran Ramesh (kr2789), Sai Srujan Chinta (sc4401), Bhavya Shahi (bs3118)"
+date: '`r Sys.time()`'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 3
+params:
+  threshold: "0.5"
+---
+
+```{r setup, include=FALSE}
+library(here)
+library(scales)
+library(tidyverse)
+library(foreign)
+library(DescTools)
+library(lme4)
+library(ROCR)
+
+theme_set(theme_bw())
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=50),tidy=TRUE, warning = FALSE)
+```
+
+# Reading Data
+
+```{r read-data}
+
+setwd(".")
+options("scipen"=100, "digits"=4)
+
+data <- read.dta("data/G&G.dta")
+data <- data[!is.na(data$warsa),]
+
+```
+
+#Helper Functions
+```{r helper-functions}
+summarize_into_table <- function(summary_obj)
+{
+  #takes summary object as input, and returns a DF res. 
+  #to print res, use print(summ(obj), quote = FALSE) is you don't want quotes
+  
+  options(digits = 4)
+  res <- t(round(summary_obj$coefficients, digits = 4))
+  z.values <- res[4,]
+  Signif <- symnum(z.values, corr = FALSE, na = FALSE, cutpoints = c(0, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ""))
+  res <- rbind(res, Signif)
+  res <- t(res)
+  res <- res[-1,]
+  res
+}
+
+comma_sep = function(x) {
+    x = strsplit(x, "")
+}
+
+convert2dArrayToDf = function(all_tests) {
+  model_names <- all_tests[,1]
+
+  invisible(apply(all_tests, 2, as.numeric))
+  invisible(sapply(all_tests, as.numeric))
+  class(all_tests) <- "numeric"
+  storage.mode(all_tests) <- "numeric"
+  
+  all_tests <- as.data.frame(all_tests)
+  
+  all_tests[,1] <- model_names
+  
+  return(all_tests)
+}
+```
+
+# k-fold Cross Validation
+
+```{r k-fold validation}
+k <- 5
+
+all_tests <- matrix(data=0, nrow=15 * k, ncol=6)
+colnames(all_tests) <- c("model", "test_index", "sens", "spec", "auc", "accuracy")
+
+set.seed(42)
+shuffled_data <- data[sample(nrow(data)),]
+folds <- cut(seq(1, nrow(shuffled_data)), breaks=k, labels=FALSE)
+
+thresholding_flag = TRUE
+threshold_value = as.numeric(params$threshold)
+
+sens_index <- 3
+spec_index <- 4
+auc_index <- 5
+accuracy_index <- 6
+```
+
+# Opportunity Models
+Generating the various opportunity models
+
+```{r opportunity-model}
+#Opportunity Models
+
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,prevwara,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,coldwar,lngdp_,gy1,peace,mount,geogia,frac,lnpop",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,diaspeaa",
+  "warsa,sxp,sxp2,lngdp_,peace,lnpop,difdpeaa,diahpeaa")
+
+regression_formula_list <- list(
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + prevwara + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + coldwar + lngdp_ + gy1 + peace + mount + geogia + frac + lnpop",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + diaspeaa",
+  "warsa ~  sxp + sxp2 + lngdp_ + peace + lnpop + difdpeaa + diahpeaa")
+
+
+for (i in c(1:5)) {
+  
+  for(testIndex in 1:k){
+    
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  opportunity.data <- shuffled_data[, filtering_columns]
+  
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds == testIndex,arr.ind=TRUE)
+  testData <- opportunity.data[testIndexes, ]
+  trainData <- opportunity.data[-testIndexes, ]
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+
+  opportunity_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+  
+  opportunity_predict <- predict(opportunity_fit, newdata=testData, type="response")
+  
+  opportunity_y.hat <- as.matrix(opportunity_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[(i-1)*k + testIndex,1] <- paste(c("opportunity",i), collapse = '.')
+  all_tests[(i-1)*k + testIndex,2] <- as.numeric(testIndex)
+  
+  if(thresholding_flag == TRUE) {
+    
+    opportunity_y.hat_normalized <- opportunity_y.hat
+    
+    opportunity_y.hat_normalized[opportunity_y.hat_normalized >= threshold_value] <- 1
+    opportunity_y.hat_normalized[opportunity_y.hat_normalized < threshold_value] <- 0
+    
+    opp_predict_normalized <- prediction(opportunity_y.hat_normalized, y)
+
+    len <- length(opp_predict_normalized@fp[[1]])
+    fp <- as.numeric(opp_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(opp_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(opp_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(opp_predict_normalized@tn[[1]][[len - 1]])
+    
+    all_tests[(i-1)*k + testIndex,sens_index] <- tp / (tp + fn)
+    all_tests[(i-1)*k + testIndex,spec_index] <- tn / (tn + fp)
+    
+    all_tests[(i-1)*k + testIndex,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+  
+    opp_predict <- prediction(opportunity_y.hat, y)
+    opp_auc <- performance(opp_predict, measure = "auc")
+    all_tests[(i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(opp_auc,"y.values")))
+    
+  } else {
+  
+    opp_predict <- prediction(opportunity_y.hat, y)
+
+    opp_f <- performance(opp_predict , measure = "f")
+    opp_where.F <- which.max(as.numeric(unlist(slot(opp_f,"y.values"))))
+    opp_what.F <- performance(opp_predict, measure="sens", x.measure="spec")
+  
+    all_tests[(i-1)*k + testIndex,sens_index] <- as.numeric(unlist(slot(opp_what.F,"y.values")))[opp_where.F]
+    all_tests[(i-1)*k + testIndex,spec_index] <- as.numeric(unlist(slot(opp_what.F,"x.values")))[opp_where.F]
+  
+    opp_auc <- performance(opp_predict, measure = "auc")
+    all_tests[(i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(opp_auc,"y.values")))
+    
+  }
+  
+  }
+  
+}
+
+lower_lim = 1
+upper_lim = 5*k
+print(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
+```
+
+# Grievance Models
+Generating the various grievance models
+
+```{r grievance-model}
+#Grievance Models
+
+filtering_columns_list <- list(
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,ygini",
+  "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,lgini")
+
+regression_formula_list <- list(
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + ygini",
+  "warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + lgini")
+
+
+for (i in c(1:3)) {
+  
+  for(testIndex in 1:k){
+    
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  grievance.data <- shuffled_data[, filtering_columns]
+  
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds == testIndex,arr.ind=TRUE)
+  testData <- grievance.data[testIndexes, ]
+  trainData <- grievance.data[-testIndexes, ]
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+  
+  grievance_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+   
+  grievance_predict <- predict(grievance_fit, newdata=testData, type="response")
+  
+  grievance_y.hat <- as.matrix(grievance_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[5 * k + (i-1)*k + testIndex,1] <- paste(c("grievance",i), collapse = '.')
+  all_tests[5 * k + (i-1)*k + testIndex,2] <- as.numeric(testIndex)
+  
+  if(thresholding_flag == TRUE) {
+    grievance_y.hat_normalized <- grievance_y.hat
+    
+    grievance_y.hat_normalized[grievance_y.hat_normalized >= threshold_value] <- 1
+    grievance_y.hat_normalized[grievance_y.hat_normalized < threshold_value] <- 0
+    
+    griev_predict_normalized <- prediction(grievance_y.hat_normalized, y)
+  
+    len <- length(griev_predict_normalized@fp[[1]])
+    fp <- as.numeric(griev_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(griev_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(griev_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(griev_predict_normalized@tn[[1]][[len - 1]])
+  
+    all_tests[5 * k + (i-1)*k + testIndex,sens_index] <- tp / (tp + fn)
+    all_tests[5 * k + (i-1)*k + testIndex,spec_index] <- tn / (tn + fp)
+    
+    all_tests[5 * k + (i-1)*k + testIndex,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+    
+    griev_predict <- prediction(grievance_y.hat, y)
+    griev_auc <- performance(griev_predict, measure = "auc")
+    all_tests[5 * k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(griev_auc,"y.values")))
+    
+  } else {
+    
+    griev_predict <- prediction(grievance_y.hat, y)
+
+    griev_f <- performance(griev_predict , measure = "f")
+    griev_where.F <- which.max(as.numeric(unlist(slot(griev_f,"y.values"))))
+    griev_what.F <- performance(griev_predict, measure="sens", x.measure="spec")
+    
+    all_tests[5 * k + (i-1)*k + testIndex,sens_index] <- as.numeric(unlist(slot(griev_what.F,"y.values")))[griev_where.F]
+    all_tests[5 * k + (i-1)*k + testIndex,spec_index] <- as.numeric(unlist(slot(griev_what.F,"x.values")))[griev_where.F]
+    
+    griev_auc <- performance(griev_predict, measure = "auc")
+    all_tests[5 * k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(griev_auc,"y.values")))  
+    
+  }
+  
+  }
+  
+}
+
+lower_lim = 5*k + 1
+upper_lim = 5*k + 3*k
+print(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
+```
+
+# Combined Model
+Generating the combined opportunity and grievance models
+
+```{r combied-model}
+#Combined Models
+
+filtering_columns_list <- list(
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,grievxb",
+  "warsa,peace,mount,geogia,lnpop,elfo,rf,pol16,etdo4590,dem,greedxb",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem,ygini",
+  "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,elfo,rf,pol16,etdo4590,dem",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,lngdp_,gy1,peace,geogia,lnpop,frac,etdo4590",
+  "warsa,sxp,sxp2,secm,gy1,peace,geogia,lnpop,frac,etdo4590,oilsxp,oilsxp2")
+
+regression_formula_list <- list(
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + grievxb",
+  "warsa ~  peace + mount + geogia + lnpop + elfo + rf + pol16 + etdo4590 + dem + greedxb",
+  "warsa ~  sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem + ygini",
+  "warsa ~ sxp + sxp2 + coldwar + secm + gy1 + peace + mount + geogia + lnpop + frac + elfo + rf + pol16 + etdo4590 + dem",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + lngdp_ + gy1 + peace + geogia + lnpop + frac + etdo4590",
+  "warsa ~  sxp + sxp2 + secm + gy1 + peace + geogia + lnpop + frac + etdo4590 +  oilsxp + oilsxp2")
+
+
+for (i in c(1:7)) {
+  
+  for(testIndex in 1:k){
+  
+  filtering_columns <- strsplit(filtering_columns_list[[i]], ',')[[1]]
+  
+  combined.data <- shuffled_data[, filtering_columns]
+  
+  #Segement your data by fold using the which() function 
+  testIndexes <- which(folds == testIndex,arr.ind=TRUE)
+  testData <- combined.data[testIndexes, ]
+  trainData <- combined.data[-testIndexes, ]
+  
+  #trainData <- na.omit(trainData)
+  #testData <- na.omit(testData)
+
+  combined_fit <- glm(as.formula(regression_formula_list[[i]]), family=binomial(link="logit"), data = trainData)
+  
+  combined_predict <- predict(combined_fit, newdata=testData, type="response")
+  
+  combined_y.hat <- as.matrix(combined_predict)
+
+  y <- as.matrix(testData$warsa)
+  
+  all_tests[(5+3)*k + (i-1)*k + testIndex,1] <- paste(c("combined",i), collapse = '.')
+  all_tests[(5+3)*k + (i-1)*k + testIndex,2] <- as.numeric(testIndex)
+  
+  if(thresholding_flag == TRUE) {
+    combined_y.hat_normalized <- combined_y.hat
+    
+    combined_y.hat_normalized[combined_y.hat_normalized >= threshold_value] <- 1
+    combined_y.hat_normalized[combined_y.hat_normalized < threshold_value] <- 0
+    
+    comb_predict_normalized <- prediction(combined_y.hat_normalized, y)
+  
+    len <- length(comb_predict_normalized@fp[[1]])
+    fp <- as.numeric(comb_predict_normalized@fp[[1]][[len - 1]])
+    tp <- as.numeric(comb_predict_normalized@tp[[1]][[len - 1]])
+    fn <- as.numeric(comb_predict_normalized@fn[[1]][[len - 1]])
+    tn <- as.numeric(comb_predict_normalized@tn[[1]][[len - 1]])
+    
+    all_tests[(5+3)*k + (i-1)*k + testIndex,sens_index] <- tp / (tp + fn)
+    all_tests[(5+3)*k + (i-1)*k + testIndex,spec_index] <- tn / (tn + fp)
+    
+    all_tests[(5+3)*k + (i-1)*k + testIndex,accuracy_index] <- (tp + tn) / (tp + tn + fp + fn)
+    
+    comb_predict <- prediction(combined_y.hat, y)
+    comb_auc <- performance(comb_predict, measure = "auc")
+    all_tests[(5+3)*k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(comb_auc,"y.values")))
+    
+  } else {
+    
+    comb_predict <- prediction(combined_y.hat, y)
+    
+    comb_f <- performance(comb_predict , measure = "f")
+    comb_where.F <- which.max(as.numeric(unlist(slot(comb_f,"y.values"))))
+    comb_what.F <- performance(comb_predict, measure="sens", x.measure="spec")
+    
+    all_tests[(5+3)*k + (i-1)*k + testIndex,sens_index] <- as.numeric(unlist(slot(comb_what.F,"y.values")))[comb_where.F]
+    all_tests[(5+3)*k + (i-1)*k + testIndex,spec_index] <- as.numeric(unlist(slot(comb_what.F,"x.values")))[comb_where.F]
+    
+    comb_auc <- performance(comb_predict, measure = "auc")
+    all_tests[(5+3)*k + (i-1)*k + testIndex,auc_index] <- as.numeric(unlist(slot(comb_auc,"y.values")))
+  
+  }
+  
+  }
+}
+
+lower_lim = 5*k + 3*k + 1
+upper_lim = 5*k + 3*k + 7*k
+print(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
+```
+
+# Computing Averages of the k-fold Validation
+
+```{r averaging-results}
+
+all_tests <- convert2dArrayToDf(all_tests)
+
+result <- aggregate(all_tests[, 3:6], list(all_tests$model), mean)
+
+names(result)[1]<-"model"
+
+print(result)
+
+write.csv(result, file = paste0("Project_Extension_2_Threshold_", params$threshold, ".csv"))
+```
