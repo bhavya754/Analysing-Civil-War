@@ -1,6 +1,6 @@
 ---
 title: "MSD 2019 Final Project"
-subtitle: "A replication of Greed and Grievance in Civil War by Paul Collier and Anke Hoeffler, 2000"
+subtitle: "A replication and extension of Greed and Grievance in Civil War by Paul Collier and Anke Hoeffler, 2000"
 author: "Kiran Ramesh (kr2789), Sai Srujan Chinta (sc4401), Bhavya Shahi (bs3118)"
 date: '`r Sys.time()`'
 output:
