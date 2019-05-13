@@ -350,11 +350,11 @@ The challenges we faced during replication are as follows:
 
 ## 4.1 In sample testing
 
-In sample testing is done for all the models (opportunity, grievance and combined). The Specificity, Sensitivity, AUC, and Accuracy are recorded at thresholds 0.1 and 0.5
+In sample testing is done for all the models (opportunity, grievance and combined). The Specificity, Sensitivity, and Accuracy are recorded at thresholds 0.1 and 0.5, AUC is recorded as well.
 
 
 ```{r reading-data-ext1}
-
+data <- data[!is.na(data$warsa),]
 all_tests <- matrix(data=0, nrow=15, ncol=5)
 colnames(all_tests) <- c("model", "sens", "spec", "auc", "accuracy")
 
@@ -372,7 +372,7 @@ all_tests_index <- 1
 
 ```{r opportunity-model-ext1}
 #Opportunity Models
-opportunity_model <- function(threshold_value){
+opportunity_model_ext1 <- function(threshold_value){
 filtering_columns_list <- list(
   "warsa,sxp,sxp2,coldwar,secm,gy1,peace,prevwara,mount,geogia,frac,lnpop",
   "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,frac,lnpop",
@@ -451,8 +451,8 @@ for (i in c(1:5)) {
 }
 return(all_tests)
 }
-temp1_1<- opportunity_model(0.1)
-temp1_2<- opportunity_model(0.5)
+temp1_1<- opportunity_model_ext1(0.1)
+temp1_2<- opportunity_model_ext1(0.5)
 print("For threshold = 0.1 :")
 print(temp1_1[1:5,])
 print("For threshold = 0.5 :")
@@ -464,7 +464,7 @@ print(temp1_2[1:5,])
 
 ```{r grievance-model-ext1}
 #Grievance Models
-grievance_model <- function(threshold_value){
+grievance_model_ext1 <- function(threshold_value){
 filtering_columns_list <- list(
   "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop",
   "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,ygini",
@@ -540,8 +540,8 @@ for (i in c(1:3)) {
 } 
 return(all_tests)
 }
-temp2_1<- grievance_model(0.1)
-temp2_2<- grievance_model(0.5)
+temp2_1<- grievance_model_ext1(0.1)
+temp2_2<- grievance_model_ext1(0.5)
 
 print("For threshold = 0.1 :")
 print(temp2_1[1:3,])
@@ -555,7 +555,7 @@ Generating the combined opportunity and grievance models
 
 ```{r combied-model-ext1}
 #Combined Models
-combined_model <- function(threshold_value){
+combined_model_ext1 <- function(threshold_value){
 filtering_columns_list <- list(
   "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,grievxb",
   "warsa,peace,mount,geogia,lnpop,elfo,rf,pol16,etdo4590,dem,greedxb",
@@ -638,8 +638,8 @@ for (i in c(1:7)) {
 } 
 return(all_tests)
 }
-temp3_1<- combined_model(0.1)
-temp3_2<- combined_model(0.5)
+temp3_1<- combined_model_ext1(0.1)
+temp3_2<- combined_model_ext1(0.5)
 
 print("For threshold = 0.1 :")
 print(temp3_1[1:7,])
@@ -671,10 +671,12 @@ print(temp3_2[1:7,])
 
 ## 4.2 Out-sample testing
 
-Out sample testing is done for all the models (opportunity, grievance and combined). The Specificity, Sensitivity, AUC, and Accuracy are recorded at thresholds 0.1 and 0.5. 5-fold crossvalidation is used. 
+Out sample testing is done for all the models (opportunity, grievance and combined). The Specificity, Sensitivity, and Accuracy are recorded at thresholds 0.1 and 0.5. AUC is recorded as well. 5-fold crossvalidation is used. 
 
 
 ```{r k-fold validation-ext2}
+
+data <- data[!is.na(data$warsa),]
 k <- 5
 
 all_tests <- matrix(data=0, nrow=15 * k, ncol=6)
@@ -685,7 +687,6 @@ shuffled_data <- data[sample(nrow(data)),]
 folds <- cut(seq(1, nrow(shuffled_data)), breaks=k, labels=FALSE)
 
 thresholding_flag = TRUE
-#threshold_value = as.numeric(params$threshold)
 
 sens_index <- 3
 spec_index <- 4
@@ -697,7 +698,7 @@ accuracy_index <- 6
 
 ```{r opportunity-model-ext2}
 #Opportunity Models
-opportunity_model <- function(threshold_value){
+opportunity_model_ext2 <- function(threshold_value){
 filtering_columns_list <- list(
   "warsa,sxp,sxp2,coldwar,secm,gy1,peace,prevwara,mount,geogia,frac,lnpop",
   "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,frac,lnpop",
@@ -786,11 +787,11 @@ for (i in c(1:5)) {
 
 lower_lim = 1
 upper_lim = 5*k
+print(all_tests)
 return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
 }
-temp1_1<- opportunity_model(0.1)
-temp1_2<- opportunity_model(0.5)
-
+temp1_1<- opportunity_model_ext2(0.1)
+temp1_2<- opportunity_model_ext2(0.5)
 print("For threshold = 0.1 :")
 print(temp1_1)
 print("For threshold = 0.5 :")
@@ -803,7 +804,7 @@ print(temp1_2)
 ```{r grievance-model-ext2}
 #Grievance Models
 #Grievance Models
-grievance_model <- function(threshold_value){
+grievance_model_ext2 <- function(threshold_value){
 filtering_columns_list <- list(
   "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop",
   "warsa,elfo,rf,pol16,etdo4590,dem,peace,mount,geogia,lnpop,ygini",
@@ -889,8 +890,9 @@ lower_lim = 5*k + 1
 upper_lim = 5*k + 3*k
 return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
 }
-temp2_1<- grievance_model(0.1)
-temp2_2<- grievance_model(0.5)
+
+temp2_1<- grievance_model_ext2(0.1)
+temp2_2<- grievance_model_ext2(0.5)
 
 print("For threshold = 0.1 :")
 print(temp2_1)
@@ -903,7 +905,7 @@ print(temp2_2)
 
 ```{r combied-model-ext2}
 #Combined Models
-combined_model <- function(threshold_value){
+combined_model_ext2 <- function(threshold_value){
 filtering_columns_list <- list(
   "warsa,sxp,sxp2,coldwar,secm,gy1,peace,mount,geogia,lnpop,frac,grievxb",
   "warsa,peace,mount,geogia,lnpop,elfo,rf,pol16,etdo4590,dem,greedxb",
@@ -996,8 +998,9 @@ lower_lim = 5*k + 3*k + 1
 upper_lim = 5*k + 3*k + 7*k
 return(convert2dArrayToDf(all_tests[lower_lim:upper_lim,1:6]))
 }
-temp3_1<- combined_model(0.1)
-temp3_2<- combined_model(0.5)
+
+temp3_1<- combined_model_ext2(0.1)
+temp3_2<- combined_model_ext2(0.5)
 
 print("For threshold = 0.1 :")
 print(temp3_1)
@@ -1009,14 +1012,6 @@ print(temp3_2)
 ### 4.2.4 Computing Averages of the k-fold Validation
 
 ```{r averaging-results-ext2}
-# print("Results for threshold = 0.1")
-# 
-# print("Opportunity Models")
-# print(temp1_1)
-# print("Grievance Models")
-# print(temp2_1)
-# print("Combined Models")
-# print(temp3_1)
 
 all_tests[1:25,] <- as.matrix(temp1_1)
 all_tests[26:40,] <- as.matrix(temp2_1)
@@ -1029,9 +1024,6 @@ result <- aggregate(all_tests[, 3:6], list(all_tests$model), mean)
 names(result)[1]<-"model"
 print("Averaged K-Means results (for threshold=0.1)")
 print(result)
-
-
-# print("For threshold value = 0.5")
 
 all_tests <- matrix(data=0, nrow=15 * k, ncol=6)
 colnames(all_tests) <- c("model", "test_index", "sens", "spec", "auc", "accuracy")
@@ -1048,13 +1040,11 @@ names(result)[1]<-"model"
 print("Averaged K-Means results (for threshold=0.5)")
 print(result)
 
-
-#write.csv(result, file = paste0("Project_Extension_2_Threshold_", params$threshold, ".csv"))
 ```
 
 ## 4.3 Regularized Model
 
-descriptiion lorum impsonvefonvefv
+A regularised model is trained on all features and the accuracy achieved is comparable to the previous models. The sensitivity decreases drastically for threshold = 0.5, even though accuracy increases. 
 
 ```{r reading-data-ext3}
 
@@ -1169,7 +1159,8 @@ print(result)
 
 3) The performance of the regularized GLM is not necessarily better than the proposed models. The sensitivity of the 7th combined model is significantly better than that of the regularized model while all the other parameters are at least comparable.
 
-4) Our findings seem to conform to the authors' claim that "greed is a better indicator than grievance for predicting civil wars” 
+4) Our findings seem to confirm to the authors' claim that "greed is a better indicator than grievance for predicting civil wars” 
+
 
 
 The following is a list of all packages used to generate these results. (Leave at very end of file.)
