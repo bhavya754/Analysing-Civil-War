@@ -1,7 +1,10 @@
 # target to make the file report
 all: mds_project.html
 
-mds_project.html:
+download_datafiles:
+	bash 01_get_original_data.sh
+
+mds_project.html: download_datafiles
 	#Project Replication
 	Rscript -e "rmarkdown::render('project_replication.Rmd')"
 	#Project Extension 1 - In Sample
