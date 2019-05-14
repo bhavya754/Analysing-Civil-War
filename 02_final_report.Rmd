@@ -1150,8 +1150,14 @@ print("For threshold = 0.5")
 print(result)
 
 ```
+## 4.4 Summary of our work
 
-## 4.4 Observations 
+1) We replicated the 5 opportunity, 3 grievance and 7 combined models with their corresponding subset of features proposed in the paper.
+
+2) We performed in-sample and out of sample testing (using k-fold cross validation technique) on each of these models.
+
+3) A regularised GLM model was trained on the raw data with all the features and tested using k-fold cross validation.
+## 4.5 Observations 
 
 1) The accuracy and specificity is higher, while the sensitivity is very low for models at threshold 0.5 (because the model almost always predicts 0). The accuracy and specificity decrease but the sensitivity increase dramatically at threshold 0.1. So the number of civil wars we’re actually predicting at this threshold is very low, and while the accuracy and specificity increase (because the dataset is skewed), this does not mean that this model performs better. 
 
@@ -1159,7 +1165,7 @@ print(result)
 
 3) The performance of the regularized GLM is not necessarily better than the proposed models. The sensitivity of the 7th combined model is significantly better than that of the regularized model while all the other parameters are at least comparable.
 
-4) Our findings seem to confirm to the authors' claim that "greed is a better indicator than grievance for predicting civil wars” 
+4) Our findings seem to conform to the authors' claim that "greed is a better indicator than grievance for predicting civil wars”.  
 
 
 
