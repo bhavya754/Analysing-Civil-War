@@ -204,7 +204,7 @@ $(document).ready(function () {
 <h1 class="title toc-ignore">MSD 2019 Final Project</h1>
 <h3 class="subtitle"><em>A replication and extension of Greed and Grievance in Civil War by Paul Collier and Anke Hoeffler, 2000</em></h3>
 <h4 class="author"><em>Kiran Ramesh (kr2789), Sai Srujan Chinta (sc4401), Bhavya Shahi (bs3118)</em></h4>
-<h4 class="date"><em>2019-05-13 18:07:09</em></h4>
+<h4 class="date"><em>2019-05-13 23:56:23</em></h4>
 
 </div>
 
@@ -234,16 +234,15 @@ $(document).ready(function () {
 <li><a href="#computing-averages-of-the-k-fold-validation"><span class="toc-section-number">4.2.4</span> 4.2.4 Computing Averages of the k-fold Validation</a></li>
 </ul></li>
 <li><a href="#regularized-model"><span class="toc-section-number">4.3</span> 4.3 Regularized Model</a></li>
-<li><a href="#observations"><span class="toc-section-number">4.4</span> 4.4 Observations</a></li>
+<li><a href="#summary-of-our-work"><span class="toc-section-number">4.4</span> 4.4 Summary of our work</a></li>
+<li><a href="#observations"><span class="toc-section-number">4.5</span> 4.5 Observations</a></li>
 </ul></li>
 </ul>
 </div>
 
 <div id="introduction" class="section level1">
 <h1><span class="header-section-number">1</span> 1. Introduction</h1>
-<p>Most major conflicts today aren’t international conflicts but are civil wars. The authors cite the Stockholm International Peace Research Institute which claims that all of the 15 major armed conflicts in 2002 (the year before the paper was published) were civil wars. In a previous work by the same authors (published in 1998), the authors proposed that the post-conflict gains by the rebels would be the primary motivation for civil war. The paper focused on testing the implication that if the post-conflict pay-offs were high, there would be justification for prolonging the civil war. The authors revisit this assumption in this paper, as they recognize that the previous assumption was untenable: The rebel groups usually cover their costs during the conflict. Thus, they propose a more general theory in this paper which compares the opportunities for rebellion versus the constraints to rebellion.</p>
-<p>Political science states that most rebellions occur when grievances are sufficiently dire that people feel the need to rebel. However economic theory states that rebellion is an industry which generates profits for the rebels (through looting and extortion), and thus rebels are motivated by greed. Thus, rebellions arises when there are atypical opportunities for profit available, and not due to motivation.</p>
-<p>The paper compares the two theories- opportunity (greed) versus motivation (grievance).</p>
+<p>Most major conflicts today aren’t international conflicts but are civil wars. The authors cite the Stockholm International Peace Research Institute which claims that all of the 15 major armed conflicts in 2002 (the year before the paper was published) were civil wars. In a previous work by the same authors (published in 1998), the authors proposed that the post-conflict gains by the rebels would be the primary motivation for civil war. The paper focused on testing the implication that if the post-conflict pay-offs were high, there would be justification for prolonging the civil war. The authors revisit this assumption in this paper, as they recognize that the previous assumption was untenable: The rebel groups usually cover their costs during the conflict. Thus, they propose a more general theory in this paper which compares the opportunities for rebellion versus the constraints to rebellion. Political science states that most rebellions occur when grievances are sufficiently dire that people feel the need to rebel. However economic theory states that rebellion is an industry which generates profits for the rebels (through looting and extortion), and thus rebels are motivated by greed. Thus, rebellions arises when there are atypical opportunities for profit available, and not due to motivation. The paper compares the two theories- opportunity (greed) versus motivation (grievance).</p>
 </div>
 <div id="replicating-the-original-study" class="section level1">
 <h1><span class="header-section-number">2</span> 2. Replicating the Original Study</h1>
@@ -272,6 +271,7 @@ $(document).ready(function () {
 <div id="regression-analysis" class="section level2">
 <h2><span class="header-section-number">2.2</span> 2.2 Regression Analysis</h2>
 <p>Models are developed which predict the risk of civil war in a five-year period using logistic regression. Two models are developed - one using proxies for opportunity, and one using proxies for grievances. The two are compared and an integrated model is arrived at.</p>
+<p>The following code reads the data, and creates helper functions to summarize tables, and convert arrays to dataframes.</p>
 <pre class="r"><code>setwd(&quot;.&quot;)
 options(scipen = 100, digits = 4)
 
@@ -925,6 +925,7 @@ for (i in c(1:6)) {
 </div>
 <div id="extending-the-original-study" class="section level1">
 <h1><span class="header-section-number">4</span> 4. Extending the original study</h1>
+<p>The first two extensions involve testing the proposed models. In the paper, though the authors show the results of the logistic regression, they do not provide any evidence in the form of in-sample or out-of-sample testing to back their claims regarding the utility of these models. We perform both in-sample and out-of-sample testing using k-fold cross validation and present our findings here.</p>
 <div id="in-sample-testing" class="section level2">
 <h2><span class="header-section-number">4.1</span> 4.1 In sample testing</h2>
 <p>In sample testing is done for all the models (opportunity, grievance and combined). The Specificity, Sensitivity, and Accuracy are recorded at thresholds 0.1 and 0.5, AUC is recorded as well.</p>
@@ -971,6 +972,7 @@ opportunity_model_ext1 &lt;- function(threshold_value) {
         
         opportunity_fit &lt;- glm(as.formula(regression_formula_list[[i]]), 
             family = binomial(link = &quot;logit&quot;), data = trainData)
+        
         
         opportunity_predict &lt;- predict(opportunity_fit, 
             newdata = testData, type = &quot;response&quot;)
@@ -1039,8 +1041,10 @@ opportunity_model_ext1 &lt;- function(threshold_value) {
             all_tests_index &lt;- all_tests_index + 1
         }
     }
+    
     return(all_tests)
 }
+
 temp1_1 &lt;- opportunity_model_ext1(0.1)
 temp1_2 &lt;- opportunity_model_ext1(0.5)
 print(&quot;For threshold = 0.1 :&quot;)</code></pre>
@@ -1073,6 +1077,7 @@ print(&quot;For threshold = 0.1 :&quot;)</code></pre>
 ## [3,] &quot;0.836014987877453&quot; &quot;0.932&quot;            
 ## [4,] &quot;0.86101243339254&quot;  &quot;0.947899159663866&quot;
 ## [5,] &quot;0.860956927175844&quot; &quot;0.949579831932773&quot;</code></pre>
+<p>The accuracy is high for the last two opportunity models while their sensitivity is low because the last two models contain diasporas which result in the loss of lots of data-points (at threshold 0.1). The sensitivity is very low and the accuracy is very high for all the models at threshold 0.5 as expected.</p>
 </div>
 <div id="grievance-model-testing" class="section level3">
 <h3><span class="header-section-number">4.1.2</span> 4.1.2 Grievance Model testing</h3>
@@ -1085,7 +1090,6 @@ grievance_model_ext1 &lt;- function(threshold_value) {
     regression_formula_list &lt;- list(&quot;warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop&quot;, 
         &quot;warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + ygini&quot;, 
         &quot;warsa ~  elfo + rf + pol16 + etdo4590 + dem + peace + mount + geogia + lnpop + lgini&quot;)
-    
     
     for (i in c(1:3)) {
         
@@ -1102,7 +1106,6 @@ grievance_model_ext1 &lt;- function(threshold_value) {
         
         grievance_fit &lt;- glm(as.formula(regression_formula_list[[i]]), 
             family = binomial(link = &quot;logit&quot;), data = trainData)
-        
         grievance_predict &lt;- predict(grievance_fit, 
             newdata = testData, type = &quot;response&quot;)
         
@@ -1173,6 +1176,8 @@ grievance_model_ext1 &lt;- function(threshold_value) {
         }
         
     }
+    
+    
     return(all_tests)
 }
 temp2_1 &lt;- grievance_model_ext1(0.1)
@@ -1196,6 +1201,7 @@ print(&quot;For threshold = 0.1 :&quot;)</code></pre>
 ## [1,] &quot;grievance.1&quot; &quot;0&quot;  &quot;1&quot;  &quot;0.777411129443529&quot; &quot;0.930588235294118&quot;
 ## [2,] &quot;grievance.2&quot; &quot;0&quot;  &quot;1&quot;  &quot;0.759260061517131&quot; &quot;0.932119205298013&quot;
 ## [3,] &quot;grievance.3&quot; &quot;0&quot;  &quot;1&quot;  &quot;0.806474149976711&quot; &quot;0.93698175787728&quot;</code></pre>
+<p>The in-sample results of the grievance models are comparable to those of the opportunity model at threshold 0.1. In model 3 we see that accuracy, sensitivity, and specificity all increase. We notice that this model uses land inequality Gini Index as a feature instead of income iniequality. This may mean that land inequality is important.</p>
 </div>
 <div id="combined-model-testing" class="section level3">
 <h3><span class="header-section-number">4.1.3</span> 4.1.3 Combined Model testing</h3>
@@ -1345,15 +1351,9 @@ print(&quot;For threshold = 0.1 :&quot;)</code></pre>
 ## [5,] &quot;0.859779222538261&quot; &quot;0.930232558139535&quot;
 ## [6,] &quot;0.835794577914921&quot; &quot;0.932&quot;            
 ## [7,] &quot;0.894252873563215&quot; &quot;0.926605504587156&quot;</code></pre>
-<pre class="r"><code># print('Results for threshold = 0.1')
-
-# print('Opportunity Models') print(temp1_1)
-# print('Grievance Models') print(temp2_1)
-# print('Combined Models') print(temp3_1)
-# print('Results for threshold = 0.5')
-# print('Opportunity Models') print(temp1_2)
-# print('Grievance Models') print(temp2_2)
-# print('Combined Models') print(temp3_2)</code></pre>
+<p>We see that model 7 performs the best out of all combined models. The results are comparable to the opportunity model (even though the best opportunity model has a higher accuracy, this is because of the inclusion of diasporas as a feature).</p>
+<p>The features used in the best combined model are:</p>
+<p>Primary export commodity Male secondary school enrollment GDP growth Number of year of peace preceding the war Geographic dispersion Population Social fractionalisation Ethnic fractionalisation Oil exports</p>
 </div>
 </div>
 <div id="out-sample-testing" class="section level2">
@@ -1961,8 +1961,8 @@ result &lt;- aggregate(all_tests[, 3:6], list(all_tests$model),
     mean)
 
 names(result)[1] &lt;- &quot;model&quot;
-print(&quot;Averaged K-Means results (for threshold=0.1)&quot;)</code></pre>
-<pre><code>## [1] &quot;Averaged K-Means results (for threshold=0.1)&quot;</code></pre>
+print(&quot;Averaged K-fold validation results (for threshold=0.1)&quot;)</code></pre>
+<pre><code>## [1] &quot;Averaged K-fold validation results (for threshold=0.1)&quot;</code></pre>
 <pre class="r"><code>print(result)</code></pre>
 <pre><code>##            model   sens   spec    auc accuracy
 ## 1     combined.1 0.7214 0.8029 0.8459   0.7954
@@ -1994,8 +1994,8 @@ result &lt;- aggregate(all_tests[, 3:6], list(all_tests$model),
     mean)
 
 names(result)[1] &lt;- &quot;model&quot;
-print(&quot;Averaged K-Means results (for threshold=0.5)&quot;)</code></pre>
-<pre><code>## [1] &quot;Averaged K-Means results (for threshold=0.5)&quot;</code></pre>
+print(&quot;Averaged K-fold validation results (for threshold=0.5)&quot;)</code></pre>
+<pre><code>## [1] &quot;Averaged K-fold validation results (for threshold=0.5)&quot;</code></pre>
 <pre class="r"><code>print(result)</code></pre>
 <pre><code>##            model    sens   spec    auc accuracy
 ## 1     combined.1 0.02000 0.9871 0.8459   0.9207
@@ -2013,11 +2013,12 @@ print(&quot;Averaged K-Means results (for threshold=0.5)&quot;)</code></pre>
 ## 13 opportunity.3 0.04872 0.9915 0.8257   0.9271
 ## 14 opportunity.4 0.08000 0.9927 0.8436   0.9431
 ## 15 opportunity.5 0.09818 0.9909 0.8425   0.9431</code></pre>
+<p>As we saw in the in-sample testing, combined model 7 performs best overall. Even though the best opportunity model has a slightly higher accuracy, its specificity is low.</p>
 </div>
 </div>
 <div id="regularized-model" class="section level2">
 <h2><span class="header-section-number">4.3</span> 4.3 Regularized Model</h2>
-<p>A regularised model is trained on all features and the accuracy achieved is comparable to the previous models. The sensitivity decreases drastically for threshold = 0.5, even though accuracy increases.</p>
+<p>A regularised model is trained on all features except the diaspora related features and the accuracy achieved is comparable to the previous models. The sensitivity decreases drastically for threshold = 0.5, even though accuracy increases. The diaspora related features are removed because including them results in the loss of a majority of the data-points and the resulting regression is not really viable.</p>
 <pre class="r"><code>data &lt;- data[!is.na(data$warsa), ]
 k &lt;- 5
 
@@ -2037,13 +2038,14 @@ spec_index &lt;- 4
 auc_index &lt;- 5
 accuracy_index &lt;- 6</code></pre>
 <pre class="r"><code>reg_model &lt;- function(threshold_value) {
+    feats &lt;- c()
     for (testIndex in 1:k) {
         
         regularized.data &lt;- shuffled_data %&gt;% select(warsa, 
             coldwar, prevwara, peace, elfo, rf, frac, 
             geogia, mount, lnpop, sxp, sxp2, dem, ygini, 
-            lgini, lngdp_, gy1, secm, diaspeaa, difdpeaa, 
-            diahpeaa, pol16, oilsxp, oilsxp2, etdo4590)
+            lgini, lngdp_, gy1, secm, pol16, oilsxp, 
+            oilsxp2, etdo4590)
         
         # Segement your data by fold using the which()
         # function
@@ -2065,6 +2067,13 @@ accuracy_index &lt;- 6</code></pre>
             family = &quot;binomial&quot;, type.measure = &quot;auc&quot;)
         regularized_predict &lt;- predict(regularized_fit, 
             test_x, type = &quot;response&quot;, s = &quot;lambda.min&quot;)
+        
+        # plot(regularized_fit)
+        tmp_coeffs &lt;- coef(regularized_fit, s = &quot;lambda.min&quot;)
+        words &lt;- data.frame(name = tmp_coeffs@Dimnames[[1]][tmp_coeffs@i + 
+            1], coefficient = tmp_coeffs@x)
+        words &lt;- arrange(words, desc(coefficient))
+        feats &lt;- rbind(feats, words)
         
         regularized_y.hat &lt;- as.matrix(regularized_predict)
         
@@ -2108,15 +2117,44 @@ accuracy_index &lt;- 6</code></pre>
             &quot;y.values&quot;)))
     }
     
+    t &lt;- feats %&gt;% group_by(name) %&gt;% summarise(n = mean(coefficient))
+    
     lower_lim = 1
     upper_lim = k
+    print(&quot;Features and Coefficients: &quot;)
+    print(as.data.frame(t))
     return(convert2dArrayToDf(all_tests[lower_lim:upper_lim, 
         1:6]))
+    
 }</code></pre>
 <pre class="r"><code># For threshold = 0.1
 
-temp1 &lt;- reg_model(0.1)
-all_tests[1:5, ] &lt;- as.matrix(temp1)
+temp1 &lt;- reg_model(0.1)</code></pre>
+<pre><code>## [1] &quot;Features and Coefficients: &quot;
+##           name            n
+## 1  (Intercept)  -26.9197286
+## 2      coldwar   -3.1840568
+## 3          dem   -0.0720675
+## 4         elfo    0.0210054
+## 5     etdo4590    4.2628694
+## 6         frac   -0.0005244
+## 7       geogia   -6.0499650
+## 8          gy1   -0.1008656
+## 9        lgini   -0.7327749
+## 10      lngdp_   -0.9554913
+## 11       lnpop    1.7272051
+## 12       mount    0.0015087
+## 13      oilsxp  -29.1941780
+## 14     oilsxp2  139.8019611
+## 15       peace    0.0011763
+## 16       pol16  -42.7966409
+## 17    prevwara    1.0985948
+## 18          rf   -0.0190421
+## 19        secm   -0.0145222
+## 20         sxp   90.1574278
+## 21        sxp2 -207.7950505
+## 22       ygini    0.0476767</code></pre>
+<pre class="r"><code>all_tests[1:5, ] &lt;- as.matrix(temp1)
 all_tests &lt;- convert2dArrayToDf(all_tests)
 result &lt;- aggregate(all_tests[, 3:6], list(all_tests$model), 
     mean)
@@ -2125,15 +2163,39 @@ names(result)[1] &lt;- &quot;model&quot;
 print(&quot;For threshold = 0.1&quot;)</code></pre>
 <pre><code>## [1] &quot;For threshold = 0.1&quot;</code></pre>
 <pre class="r"><code>print(result)</code></pre>
-<pre><code>##         model   sens   spec    auc accuracy
-## 1 regularized 0.5667 0.8524 0.8433   0.8304</code></pre>
+<pre><code>##         model sens  spec    auc accuracy
+## 1 regularized  0.5 0.883 0.7869   0.8583</code></pre>
 <pre class="r"><code># For threshold = 0.5
 
 all_tests &lt;- matrix(data = 0, nrow = k, ncol = 6)
 colnames(all_tests) &lt;- c(&quot;model&quot;, &quot;test_index&quot;, &quot;sens&quot;, 
     &quot;spec&quot;, &quot;auc&quot;, &quot;accuracy&quot;)
-temp1 &lt;- reg_model(0.5)
-all_tests[1:5, ] &lt;- as.matrix(temp1)
+temp1 &lt;- reg_model(0.5)</code></pre>
+<pre><code>## [1] &quot;Features and Coefficients: &quot;
+##           name            n
+## 1  (Intercept)  -22.1207961
+## 2      coldwar   -2.7024678
+## 3          dem   -0.0689137
+## 4         elfo    0.0182724
+## 5     etdo4590    3.7455538
+## 6         frac   -0.0004523
+## 7       geogia   -5.5986545
+## 8          gy1   -0.0915377
+## 9       lngdp_   -0.8959978
+## 10       lnpop    1.4493340
+## 11       mount    0.0013848
+## 12      oilsxp  -16.9648482
+## 13     oilsxp2   75.3106633
+## 14       peace    0.0004219
+## 15       pol16  -37.8379400
+## 16    prevwara    1.1126036
+## 17          rf   -0.0160848
+## 18        secm   -0.0089387
+## 19         sxp   67.5133087
+## 20        sxp2 -144.2059344
+## 21       ygini    0.0509712
+## 22       lgini   -0.3251365</code></pre>
+<pre class="r"><code>all_tests[1:5, ] &lt;- as.matrix(temp1)
 all_tests &lt;- convert2dArrayToDf(all_tests)
 result &lt;- aggregate(all_tests[, 3:6], list(all_tests$model), 
     mean)
@@ -2142,18 +2204,34 @@ names(result)[1] &lt;- &quot;model&quot;
 print(&quot;For threshold = 0.5&quot;)</code></pre>
 <pre><code>## [1] &quot;For threshold = 0.5&quot;</code></pre>
 <pre class="r"><code>print(result)</code></pre>
-<pre><code>##         model    sens   spec    auc accuracy
-## 1 regularized 0.06666 0.9891 0.8336   0.9321</code></pre>
+<pre><code>##         model sens  spec    auc accuracy
+## 1 regularized 0.09 0.981 0.7751   0.9234</code></pre>
+</div>
+<div id="summary-of-our-work" class="section level2">
+<h2><span class="header-section-number">4.4</span> 4.4 Summary of our work</h2>
+<ol style="list-style-type: decimal">
+<li><p>We replicated the 5 opportunity, 3 grievance and 7 combined models with their corresponding subset of features proposed in the paper.</p></li>
+<li><p>We performed in-sample and out of sample testing (using k-fold cross validation technique) on each of these models at different threshold values (to account for the heavy imbalance in the dataset).</p></li>
+<li><p>A regularised GLM model was trained on the raw data with all the features and tested using k-fold cross validation.</p></li>
+</ol>
 </div>
 <div id="observations" class="section level2">
-<h2><span class="header-section-number">4.4</span> 4.4 Observations</h2>
+<h2><span class="header-section-number">4.5</span> 4.5 Observations</h2>
 <ol style="list-style-type: decimal">
-<li><p>The accuracy and specificity is higher, while the sensitivity is very low for models at threshold 0.5 (because the model almost always predicts 0). The accuracy and specificity decrease but the sensitivity increase dramatically at threshold 0.1. So the number of civil wars we’re actually predicting at this threshold is very low, and while the accuracy and specificity increase (because the dataset is skewed), this does not mean that this model performs better.</p></li>
-<li><p>Broadly speaking, the performance of the first three opportunity models is comparable to the grievance models. However, the last two opportunity models tend to outperform even the combined models (in terms of accuracy).</p></li>
-<li><p>The performance of the regularized GLM is not necessarily better than the proposed models. The sensitivity of the 7th combined model is significantly better than that of the regularized model while all the other parameters are at least comparable.</p></li>
-<li><p>Our findings seem to confirm to the authors’ claim that “greed is a better indicator than grievance for predicting civil wars”</p></li>
+<li><p>The dataset is heavily skewed (78 1’s (civil war occurred and 1089 0’s (civil war did not occur)). Moreover, we lose lots of data-points because we need to ignore a data-point if atleast one attribute in it has a missing value (we lost 121 data-points).</p></li>
+<li><p>The accuracy and specificity are higher, while the sensitivity is very low for models at threshold 0.5 (because the model almost always predicts 0). The accuracy and specificity decrease but the sensitivity increase dramatically at threshold 0.1. So the number of civil wars we’re actually predicting at this threshold is very low, and while the accuracy and specificity increase (because the dataset is skewed), this does not mean that this model performs better.</p></li>
+<li><p>Broadly speaking, the performance of the first three opportunity models is comparable to the grievance models. However, the last two opportunity models tend to outperform even the combined models (in terms of accuracy). This could also be chalked out to the fact that the number of observations become very low for the last two opportunity models because the inclusion of diasporas reduces the number of available observations.</p></li>
+<li><p>The performance of the regularized GLM is not necessarily better than the proposed models. However, this model gives us a great idea about the actual utility of each of the features. From the weights of the features which are displayed in our report, here are a few key observations regarding the features:</p></li>
 </ol>
-<p>The following is a list of all packages used to generate these results. (Leave at very end of file.)</p>
+<ol style="list-style-type: lower-roman">
+<li><p>The features with significant explanatory power with positive correlation are Primary Commodity Export, Square of the dummy variable for oil export, Ethnic dominance, Population size and whether civil war occurred in the past or not, in that order.</p></li>
+<li><p>The features with significant explanatory power with negative correlation are square of the primary commodity export, polarization in society, dummy variable for oil export, geographic dispersion, whether the country was involved in the cold war or not and the GDP of the country, again in that order.</p></li>
+<li><p>The features which do not have significant explanatory power are: Democracy index, linguistic diversity, social fractionalisation, GDP growth, Land inequality, Mountainous Terrain, time since the last civil war, Religious fractionalisation, male secondary enrollment, Income inequality.</p></li>
+<li><p>According to our analysis, the feature “polarization in society” has good explanatory power. However, this is a feature which comes under the grievance model. According to the authors, the only feature from the grievance model which has significant explanatory power is ethnic dominance (ethnic dominance is highly positively correlated according to our analysis too). Therefore, our analysis seems to contradict the assertion made by the authors in this regard. The descriptive data does not suggest that polarization is important: conflict and peace episodes have very similar mean values (Table 2). Moreover, during the replication process of the combined model, we find that in that particular model the feature is not significant, and thus we dismissed it.</p></li>
+</ol>
+<ol start="5" style="list-style-type: decimal">
+<li>Our findings seem to generally conform to the authors’ claim that “greed is a better indicator than grievance for predicting civil wars”. However, grievance cannot be dismissed completely as is shown by the combined models. Furthermore, another feature in the grievance model that is important is polarization in society according to our ananlysis.</li>
+</ol>
 <pre class="r"><code>sessionInfo()</code></pre>
 <pre><code>## R version 3.5.2 (2018-12-20)
 ## Platform: x86_64-apple-darwin17.7.0 (64-bit)
